@@ -1,0 +1,29 @@
+// === Example 1 ===
+MOV R3, ACC             // Moves value in R1 register to ACC
+ADD ACC                 // Adds ACC to ACC
+MOV ACC, comp1:R3       // Moves value in ACC to R1 of comp1
+
+NOTES: 
+[
+    Mov{ 3, Symbol{ ACC } },
+    Add{ Symbol{ ACC }, Symbol{ ACC } },
+    Mov{ Symbol{ ACC }, Loc{ comp1, R1 } }
+]
+
+  - split asm string into list by newline
+  - run through list to get names and locations of all labels
+  - interpret line-by-line
+    - use regex and switch to parse out each part
+  - shut down worker on error (overflow, underflow, jump to unknown label)
+
+// === Example 2 ===
+START:
+    MOV R0, ACC
+    JGZ POSITIVE
+    JLZ NEGATIVE
+    JMP START
+POSITIVE: MOV ACC, comp1:R1
+    JMP START
+NEGATIVE:
+    MOV ACC, comp1:R3
+    JMP START
