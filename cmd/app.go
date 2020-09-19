@@ -4,7 +4,8 @@ import "github.com/jasmaa/misaka-net/internal/workers"
 
 func main() {
 	p := workers.NewProgramNode()
-	err := p.Load(`START:
+	err := p.Load(`## this is a program
+START:
 	MOV R0, ACC
 	JGZ POSITIVE
 	JLZ NEGATIVE
