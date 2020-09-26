@@ -47,12 +47,18 @@ func Tokenize(instrArr []string, labelMap map[string]int) ([][]string, error) {
 		} else if m := regexp.MustCompile(`^(NOP|SWP|SAV|NEG)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
 			// NOP|SWP|SAV|NEG
 			asm[i] = []string{m[1]}
-		} else if m := regexp.MustCompile(`^MOV\s+(-?\d+)\s*,\s+(ACC|NIL|\w+:R[0123])\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+		} else if m := regexp.MustCompile(`^MOV\s+(-?\d+)\s*,\s+(ACC|NIL)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
 			// MOV <VAL>, <DST>
-			asm[i] = []string{"MOV_VAL", m[1], m[2]}
-		} else if m := regexp.MustCompile(`^MOV\s+(ACC|NIL|R[0123])\s*,\s+(ACC|NIL|\w+:R[0123])\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			asm[i] = []string{"MOV_VAL_LOCAL", m[1], m[2]}
+		} else if m := regexp.MustCompile(`^MOV\s+(-?\d+)\s*,\s+(\w+:R[0123])\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			// MOV <VAL>, <DST>
+			asm[i] = []string{"MOV_VAL_NETWORK", m[1], m[2]}
+		} else if m := regexp.MustCompile(`^MOV\s+(ACC|NIL|R[0123])\s*,\s+(ACC|NIL)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
 			// MOV <SRC>, <DST>
-			asm[i] = []string{"MOV_SRC", m[1], m[2]}
+			asm[i] = []string{"MOV_SRC_LOCAL", m[1], m[2]}
+		} else if m := regexp.MustCompile(`^MOV\s+(ACC|NIL|R[0123])\s*,\s+(\w+:R[0123])\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			// MOV <SRC>, <DST>
+			asm[i] = []string{"MOV_SRC_NETWORK", m[1], m[2]}
 		} else if m := regexp.MustCompile(`^(ADD|SUB)\s+(-?\d+)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
 			// ADD|SUB <VAL>
 			asm[i] = []string{fmt.Sprintf("%s_VAL", m[1]), m[2]}
