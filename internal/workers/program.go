@@ -2,12 +2,16 @@ package workers
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jasmaa/misaka-net/internal/tis"
 )
+
+// Register buffer size
+const bufferSize = 1
 
 // ProgramNode is a program node that interprets TIS-100 asm
 type ProgramNode struct {
@@ -21,6 +25,8 @@ type ProgramNode struct {
 	ptr      int
 	asm      [][]string
 	labelMap map[string]int
+
+	isRunning bool
 }
 
 // NewProgramNode creates a new program node
@@ -28,22 +34,150 @@ func NewProgramNode() *ProgramNode {
 	return &ProgramNode{
 		acc: 0,
 		bak: 0,
-		r0:  make(chan int),
-		r1:  make(chan int),
-		r2:  make(chan int),
-		r3:  make(chan int),
+		r0:  make(chan int, bufferSize),
+		r1:  make(chan int, bufferSize),
+		r2:  make(chan int, bufferSize),
+		r3:  make(chan int, bufferSize),
 	}
 }
 
-// Reset resets program node execution
+// Start starts program loop and server
+func (p *ProgramNode) Start() {
+	// Run program loop
+	go func() {
+		for {
+			if p.isRunning {
+				err := p.update()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		}
+	}()
+
+	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p.Run()
+			fmt.Fprintf(w, "Success")
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p.Pause()
+			fmt.Fprintf(w, "Success")
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			p.Reset()
+			fmt.Fprintf(w, "Success")
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				return
+			}
+
+			program := r.FormValue("program")
+			err := p.Load(program)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error loading program: %s", err.Error()), http.StatusBadRequest)
+				return
+			}
+
+			fmt.Fprintf(w, "Success")
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				return
+			}
+
+			rx := r.FormValue("register")
+			v, err := strconv.Atoi(r.FormValue("value"))
+			if err != nil {
+				http.Error(w, "Cannot parse value", http.StatusBadRequest)
+				return
+			}
+
+			switch rx {
+			case "R0":
+				p.r0 <- v
+			case "R1":
+				p.r1 <- v
+			case "R2":
+				p.r2 <- v
+			case "R3":
+				p.r3 <- v
+			default:
+				http.Error(w, "Not a valid register", http.StatusBadRequest)
+				return
+			}
+
+			fmt.Fprintf(w, "Success")
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	fmt.Println("Starting server...")
+	if err := http.ListenAndServe(":8000", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Run starts asm execution
+func (p *ProgramNode) Run() {
+	p.isRunning = true
+}
+
+// Pause pauses asm execution
+func (p *ProgramNode) Pause() {
+	p.isRunning = false
+}
+
+// Reset resets asm execution and registers
 func (p *ProgramNode) Reset() {
+	p.isRunning = false
 	p.acc = 0
 	p.bak = 0
 	p.ptr = 0
+	close(p.r0)
+	p.r0 = make(chan int, bufferSize)
+	close(p.r1)
+	p.r1 = make(chan int, bufferSize)
+	close(p.r2)
+	p.r2 = make(chan int, bufferSize)
+	close(p.r3)
+	p.r3 = make(chan int, bufferSize)
 }
 
-// Load loads asm program
+// Load resets node and loads asm program
 func (p *ProgramNode) Load(s string) error {
+
+	// Reset node
+	p.Reset()
 
 	instrArr := strings.Split(s, "\n")
 
@@ -60,36 +194,6 @@ func (p *ProgramNode) Load(s string) error {
 	p.asm = asm
 	p.labelMap = labelMap
 	return nil
-}
-
-// Run runs program node
-func (p *ProgramNode) Run() {
-	forever := make(chan interface{})
-
-	go func() {
-		for {
-			err := p.update()
-			if err != nil {
-				panic(err)
-			}
-		}
-	}()
-
-	go func() {
-		// TODO: put http handler here
-		for {
-		}
-	}()
-
-	// TEMP: test put into register
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			p.r0 <- 42
-		}
-	}()
-
-	<-forever
 }
 
 // Update steps through asm

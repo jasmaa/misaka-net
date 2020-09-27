@@ -20,5 +20,5 @@ NEGATIVE:
 		panic(err)
 	}
 
-	p.Run()
+	p.Start()
 }
