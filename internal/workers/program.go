@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jasmaa/misaka-net/internal/tis"
 )
@@ -27,6 +30,7 @@ type ProgramNode struct {
 	labelMap map[string]int
 
 	isRunning bool
+	resetFlag bool
 }
 
 // NewProgramNode creates a new program node
@@ -38,6 +42,7 @@ func NewProgramNode() *ProgramNode {
 		r1:  make(chan int, bufferSize),
 		r2:  make(chan int, bufferSize),
 		r3:  make(chan int, bufferSize),
+		asm: [][]string{[]string{"NOP"}},
 	}
 }
 
@@ -47,8 +52,26 @@ func (p *ProgramNode) Start() {
 	go func() {
 		for {
 			if p.isRunning {
-				err := p.update()
-				if err != nil {
+
+				// Cancel send if node is reset
+				// TODO: make this less jank, use context.WithCancel??
+
+				c := make(chan error)
+
+				go func() {
+					c <- p.update()
+				}()
+
+				go func() {
+					for {
+						if p.resetFlag {
+							c <- nil
+						}
+						time.Sleep(1 * time.Second)
+					}
+				}()
+
+				if err := <-c; err != nil {
 					log.Fatal(err)
 				}
 			}
@@ -60,6 +83,7 @@ func (p *ProgramNode) Start() {
 		case "POST":
 			p.Run()
 			fmt.Fprintf(w, "Success")
+			log.Printf("Node is running")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -70,6 +94,7 @@ func (p *ProgramNode) Start() {
 		case "POST":
 			p.Pause()
 			fmt.Fprintf(w, "Success")
+			log.Printf("Node is paused")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -80,6 +105,7 @@ func (p *ProgramNode) Start() {
 		case "POST":
 			p.Reset()
 			fmt.Fprintf(w, "Success")
+			log.Printf("Node was reset")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -101,6 +127,7 @@ func (p *ProgramNode) Start() {
 			}
 
 			fmt.Fprintf(w, "Success")
+			log.Printf("Program was loaded")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -136,6 +163,7 @@ func (p *ProgramNode) Start() {
 			}
 
 			fmt.Fprintf(w, "Success")
+			log.Printf("Received value")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -150,6 +178,7 @@ func (p *ProgramNode) Start() {
 // Run starts asm execution
 func (p *ProgramNode) Run() {
 	p.isRunning = true
+	p.resetFlag = false
 }
 
 // Pause pauses asm execution
@@ -160,16 +189,15 @@ func (p *ProgramNode) Pause() {
 // Reset resets asm execution and registers
 func (p *ProgramNode) Reset() {
 	p.isRunning = false
+	p.resetFlag = true
+
 	p.acc = 0
 	p.bak = 0
 	p.ptr = 0
-	close(p.r0)
+
 	p.r0 = make(chan int, bufferSize)
-	close(p.r1)
 	p.r1 = make(chan int, bufferSize)
-	close(p.r2)
 	p.r2 = make(chan int, bufferSize)
-	close(p.r3)
 	p.r3 = make(chan int, bufferSize)
 }
 
@@ -229,9 +257,24 @@ func (p *ProgramNode) update() error {
 			return err
 		}
 
-		// TODO: figure out networking
-		_ = v
+		if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(tokens[2]); len(m) > 0 {
+			targetURI := m[1]
+			register := m[2]
 
+			payload := url.Values{}
+			payload.Set("register", register)
+			payload.Set("value", strconv.Itoa(v))
+
+			resp, err := http.PostForm(fmt.Sprintf("http://%s:8000/send", targetURI), payload)
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("Network move was not successful")
+			}
+		} else {
+			return fmt.Errorf("'%s' not a valid network register", tokens[2])
+		}
 	case "MOV_SRC_LOCAL":
 		// Moves value from src locally
 		v, err := p.getFromSrc(tokens[1])
