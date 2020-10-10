@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,51 +30,37 @@ type ProgramNode struct {
 	asm      [][]string
 	labelMap map[string]int
 
+	ctx       context.Context
+	cancel    context.CancelFunc
 	isRunning bool
-	resetFlag bool
 }
 
 // NewProgramNode creates a new program node
 func NewProgramNode() *ProgramNode {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &ProgramNode{
-		acc: 0,
-		bak: 0,
-		r0:  make(chan int, bufferSize),
-		r1:  make(chan int, bufferSize),
-		r2:  make(chan int, bufferSize),
-		r3:  make(chan int, bufferSize),
-		asm: [][]string{[]string{"NOP"}},
+		acc:    0,
+		bak:    0,
+		r0:     make(chan int, bufferSize),
+		r1:     make(chan int, bufferSize),
+		r2:     make(chan int, bufferSize),
+		r3:     make(chan int, bufferSize),
+		asm:    [][]string{[]string{"NOP"}},
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
 // Start starts program loop and server
 func (p *ProgramNode) Start() {
+
 	// Run program loop
 	go func() {
 		for {
 			if p.isRunning {
-
-				// Cancel send if node is reset
-				// TODO: make this less jank, use context.WithCancel??
-
-				c := make(chan error)
-
-				go func() {
-					c <- p.update()
-				}()
-
-				go func() {
-					for {
-						if p.resetFlag {
-							c <- nil
-						}
-						time.Sleep(1 * time.Second)
-					}
-				}()
-
-				if err := <-c; err != nil {
-					log.Fatal(err)
-				}
+				p.update()
+			} else {
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}()
@@ -178,18 +165,23 @@ func (p *ProgramNode) Start() {
 // Run starts asm execution
 func (p *ProgramNode) Run() {
 	p.isRunning = true
-	p.resetFlag = false
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.ctx = ctx
+	p.cancel = cancel
 }
 
 // Pause pauses asm execution
 func (p *ProgramNode) Pause() {
+	p.cancel()
 	p.isRunning = false
 }
 
 // Reset resets asm execution and registers
 func (p *ProgramNode) Reset() {
+	// Stop program execution
+	p.cancel()
 	p.isRunning = false
-	p.resetFlag = true
 
 	p.acc = 0
 	p.bak = 0
@@ -203,7 +195,6 @@ func (p *ProgramNode) Reset() {
 
 // Load resets node and loads asm program
 func (p *ProgramNode) Load(s string) error {
-
 	// Reset node
 	p.Reset()
 
@@ -265,13 +256,24 @@ func (p *ProgramNode) update() error {
 			payload.Set("register", register)
 			payload.Set("value", strconv.Itoa(v))
 
-			resp, err := http.PostForm(fmt.Sprintf("http://%s:8000/send", targetURI), payload)
+			client := http.DefaultClient
+			req, _ := http.NewRequestWithContext(
+				p.ctx,
+				"POST",
+				fmt.Sprintf("http://%s:8000/send", targetURI),
+				strings.NewReader(payload.Encode()),
+			)
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
+
+			resp, err := client.Do(req)
 			if err != nil {
 				return err
 			}
 			if resp.StatusCode != 200 {
 				return fmt.Errorf("Network move was not successful")
 			}
+
 		} else {
 			return fmt.Errorf("'%s' not a valid network register", tokens[2])
 		}
@@ -397,13 +399,33 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 	case "NIL":
 		return 0, nil
 	case "R0":
-		return <-p.r0, nil
+		select {
+		case v := <-p.r0:
+			return v, nil
+		case <-p.ctx.Done():
+			return 0, fmt.Errorf("operation cancelled")
+		}
 	case "R1":
-		return <-p.r1, nil
+		select {
+		case v := <-p.r1:
+			return v, nil
+		case <-p.ctx.Done():
+			return 0, fmt.Errorf("operation cancelled")
+		}
 	case "R2":
-		return <-p.r2, nil
+		select {
+		case v := <-p.r2:
+			return v, nil
+		case <-p.ctx.Done():
+			return 0, fmt.Errorf("operation cancelled")
+		}
 	case "R3":
-		return <-p.r3, nil
+		select {
+		case v := <-p.r3:
+			return v, nil
+		case <-p.ctx.Done():
+			return 0, fmt.Errorf("operation cancelled")
+		}
 	default:
 		return 0, fmt.Errorf("'%s' not a valid src", src)
 	}
