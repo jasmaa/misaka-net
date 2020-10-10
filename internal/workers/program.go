@@ -53,24 +53,33 @@ func NewProgramNode() *ProgramNode {
 
 // Start starts program loop and server
 func (p *ProgramNode) Start() {
-
 	// Run program loop
 	go func() {
 		for {
 			if p.isRunning {
-				p.update()
+				err := p.update()
+				if err != nil {
+					log.Print(err)
+				}
 			} else {
 				time.Sleep(1 * time.Second)
 			}
 		}
 	}()
 
+	// TODO: authenticate commands from master with key
+	// TODO: switch to faster protocol (grpc?)
+
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			p.Run()
+			if !p.isRunning {
+				p.Run()
+				log.Printf("Node is running")
+			} else {
+				log.Printf("Node is already running")
+			}
 			fmt.Fprintf(w, "Success")
-			log.Printf("Node is running")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -123,34 +132,40 @@ func (p *ProgramNode) Start() {
 	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
+			if p.isRunning {
+				if err := r.ParseForm(); err != nil {
+					http.Error(w, "Cannot parse form", http.StatusBadRequest)
+					return
+				}
+
+				rx := r.FormValue("register")
+				v, err := strconv.Atoi(r.FormValue("value"))
+				if err != nil {
+					http.Error(w, "Cannot parse value", http.StatusBadRequest)
+					return
+				}
+
+				switch rx {
+				case "R0":
+					p.r0 <- v
+				case "R1":
+					p.r1 <- v
+				case "R2":
+					p.r2 <- v
+				case "R3":
+					p.r3 <- v
+				default:
+					http.Error(w, "Not a valid register", http.StatusBadRequest)
+					return
+				}
+
+				fmt.Fprintf(w, "Success")
+				log.Printf("Received value")
+
+			} else {
+				http.Error(w, "Node not running", http.StatusBadRequest)
 			}
 
-			rx := r.FormValue("register")
-			v, err := strconv.Atoi(r.FormValue("value"))
-			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
-				return
-			}
-
-			switch rx {
-			case "R0":
-				p.r0 <- v
-			case "R1":
-				p.r1 <- v
-			case "R2":
-				p.r2 <- v
-			case "R3":
-				p.r3 <- v
-			default:
-				http.Error(w, "Not a valid register", http.StatusBadRequest)
-				return
-			}
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Received value")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -270,6 +285,8 @@ func (p *ProgramNode) update() error {
 			if err != nil {
 				return err
 			}
+			defer resp.Body.Close()
+
 			if resp.StatusCode != 200 {
 				return fmt.Errorf("Network move was not successful")
 			}
@@ -403,28 +420,28 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 		case v := <-p.r0:
 			return v, nil
 		case <-p.ctx.Done():
-			return 0, fmt.Errorf("operation cancelled")
+			return 0, fmt.Errorf("register retrieval cancelled")
 		}
 	case "R1":
 		select {
 		case v := <-p.r1:
 			return v, nil
 		case <-p.ctx.Done():
-			return 0, fmt.Errorf("operation cancelled")
+			return 0, fmt.Errorf("register retrieval cancelled")
 		}
 	case "R2":
 		select {
 		case v := <-p.r2:
 			return v, nil
 		case <-p.ctx.Done():
-			return 0, fmt.Errorf("operation cancelled")
+			return 0, fmt.Errorf("register retrieval cancelled")
 		}
 	case "R3":
 		select {
 		case v := <-p.r3:
 			return v, nil
 		case <-p.ctx.Done():
-			return 0, fmt.Errorf("operation cancelled")
+			return 0, fmt.Errorf("register retrieval cancelled")
 		}
 	default:
 		return 0, fmt.Errorf("'%s' not a valid src", src)
