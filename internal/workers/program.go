@@ -88,9 +88,13 @@ func (p *ProgramNode) Start() {
 	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			p.Pause()
+			if p.isRunning {
+				p.Pause()
+				log.Printf("Node is paused")
+			} else {
+				log.Printf("Node is already paused")
+			}
 			fmt.Fprintf(w, "Success")
-			log.Printf("Node is paused")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -100,8 +104,8 @@ func (p *ProgramNode) Start() {
 		switch r.Method {
 		case "POST":
 			p.Reset()
+			log.Printf("Node was paused and reset")
 			fmt.Fprintf(w, "Success")
-			log.Printf("Node was reset")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -132,39 +136,34 @@ func (p *ProgramNode) Start() {
 	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			if p.isRunning {
-				if err := r.ParseForm(); err != nil {
-					http.Error(w, "Cannot parse form", http.StatusBadRequest)
-					return
-				}
-
-				rx := r.FormValue("register")
-				v, err := strconv.Atoi(r.FormValue("value"))
-				if err != nil {
-					http.Error(w, "Cannot parse value", http.StatusBadRequest)
-					return
-				}
-
-				switch rx {
-				case "R0":
-					p.r0 <- v
-				case "R1":
-					p.r1 <- v
-				case "R2":
-					p.r2 <- v
-				case "R3":
-					p.r3 <- v
-				default:
-					http.Error(w, "Not a valid register", http.StatusBadRequest)
-					return
-				}
-
-				fmt.Fprintf(w, "Success")
-				log.Printf("Received value")
-
-			} else {
-				http.Error(w, "Node not running", http.StatusBadRequest)
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				return
 			}
+
+			rx := r.FormValue("register")
+			v, err := strconv.Atoi(r.FormValue("value"))
+			if err != nil {
+				http.Error(w, "Cannot parse value", http.StatusBadRequest)
+				return
+			}
+
+			switch rx {
+			case "R0":
+				p.r0 <- v
+			case "R1":
+				p.r1 <- v
+			case "R2":
+				p.r2 <- v
+			case "R3":
+				p.r3 <- v
+			default:
+				http.Error(w, "Not a valid register", http.StatusBadRequest)
+				return
+			}
+
+			fmt.Fprintf(w, "Success")
+			log.Printf("Received value")
 
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
