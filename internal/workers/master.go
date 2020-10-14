@@ -111,6 +111,14 @@ func (m *MasterNode) Start() {
 				return
 			}
 
+			// Reset network
+			err := m.broadcastCommand("reset")
+			if err != nil {
+				log.Print(err)
+				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
+				return
+			}
+
 			// Send load command to target node
 			payload := url.Values{}
 			payload.Set("program", program)
@@ -179,7 +187,7 @@ func (m *MasterNode) Start() {
 
 	// TODO: add handler for retrieving output
 
-	fmt.Println("Starting server...")
+	log.Printf("Starting server...")
 	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
 	}

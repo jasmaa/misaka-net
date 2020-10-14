@@ -171,7 +171,7 @@ func (p *ProgramNode) Start() {
 		}
 	})
 
-	fmt.Println("Starting server...")
+	log.Printf("Starting server...")
 	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
 	}
@@ -234,10 +234,7 @@ func (p *ProgramNode) Load(s string) error {
 func (p *ProgramNode) update() error {
 	tokens := p.asm[p.ptr]
 
-	fmt.Println(tokens)
-	fmt.Printf("ACC: %v\n", p.acc)
-	fmt.Printf("BAK: %v\n", p.bak)
-	fmt.Println("---")
+	log.Printf("%v\nACC: %v\nBAK: %v\n", tokens, p.acc, p.bak)
 
 	switch tokens[0] {
 	case "NOP":
@@ -262,37 +259,9 @@ func (p *ProgramNode) update() error {
 		if err != nil {
 			return err
 		}
-
-		if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(tokens[2]); len(m) > 0 {
-			targetURI := m[1]
-			register := m[2]
-
-			payload := url.Values{}
-			payload.Set("register", register)
-			payload.Set("value", strconv.Itoa(v))
-
-			client := http.DefaultClient
-			req, _ := http.NewRequestWithContext(
-				p.ctx,
-				"POST",
-				fmt.Sprintf("http://%s:8000/send", targetURI),
-				strings.NewReader(payload.Encode()),
-			)
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-			resp, err := client.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != 200 {
-				return fmt.Errorf("Network move was not successful")
-			}
-
-		} else {
-			return fmt.Errorf("'%s' not a valid network register", tokens[2])
+		err = p.sendValue(v, tokens[2])
+		if err != nil {
+			return err
 		}
 	case "MOV_SRC_LOCAL":
 		// Moves value from src locally
@@ -309,7 +278,16 @@ func (p *ProgramNode) update() error {
 			return fmt.Errorf("'%s' not a valid local register", tokens[2])
 		}
 	case "MOV_SRC_NETWORK":
-		// TODO: figure out networking
+		// Moves value from src across network
+		// TODO: reduce code reuse
+		v, err := p.getFromSrc(tokens[1])
+		if err != nil {
+			return err
+		}
+		err = p.sendValue(v, tokens[2])
+		if err != nil {
+			return err
+		}
 	case "SWP":
 		// Swaps ACC and BAK
 		temp := p.acc
@@ -446,6 +424,42 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 	default:
 		return 0, fmt.Errorf("'%s' not a valid src", src)
 	}
+}
+
+// sendValue sends value to target in network
+func (p *ProgramNode) sendValue(v int, target string) error {
+	if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(target); len(m) > 0 {
+		targetURI := m[1]
+		register := m[2]
+
+		payload := url.Values{}
+		payload.Set("register", register)
+		payload.Set("value", strconv.Itoa(v))
+
+		client := http.DefaultClient
+		req, _ := http.NewRequestWithContext(
+			p.ctx,
+			"POST",
+			fmt.Sprintf("http://%s:8000/send", targetURI),
+			strings.NewReader(payload.Encode()),
+		)
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("Network move was not successful")
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("'%s' not a valid network register", target)
 }
 
 // Max finds maximum of two ints

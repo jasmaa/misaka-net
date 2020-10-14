@@ -1,0 +1,47 @@
+version: '3'
+
+services: 
+
+  misaka1:
+    build: .
+    expose:
+      - 8000
+    networks:
+      - default
+    environment: 
+      NODE_TYPE: program
+      PROGRAM: |
+        ADD 1
+        MOV ACC, misaka2:R0
+        MOV R0, ACC
+    command: ./app
+    
+  misaka2:
+    build: .
+    expose:
+      - 8000
+    networks:
+      - default
+    environment: 
+      NODE_TYPE: program
+      PROGRAM: |
+        MOV R0, ACC
+        ADD 1
+        MOV ACC, misaka1:R0
+    command: ./app
+    
+  last_order:
+    build: .
+    ports:
+      - "8000:8000" # Map for now
+    networks:
+      - default
+    expose:
+      - 8000
+    environment:
+      NODE_TYPE: master
+      NODE_URIS: misaka1,misaka2
+    command: ./app
+
+networks:
+  default:

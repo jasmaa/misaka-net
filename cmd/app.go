@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	"github.com/jasmaa/misaka-net/internal/workers"
 )
@@ -9,33 +12,25 @@ import (
 func main() {
 
 	// TODO: have an interface for nodes
-	// TODO: read in config from env var
 
-	nodeType := "master"
+	nodeType := os.Getenv("NODE_TYPE")
 
 	switch nodeType {
 	case "program":
 		p := workers.NewProgramNode()
-		// TEMP: load default program
-		p.Load(`START:
-		    MOV R0, ACC
-		    JGZ POSITIVE
-		    JLZ NEGATIVE
-		    JMP START
-		POSITIVE: MOV ACC, comp1:R1
-		    JMP START
-		NEGATIVE:
-		    MOV ACC, comp1:R3
-		    JMP START`)
+		err := p.Load(os.Getenv("PROGRAM"))
+		if err != nil {
+			log.Printf("Could not load default program: %s", err.Error())
+		}
 		p.Start()
 	case "stack":
 		// TODO: create stack node
 	case "master":
 		// TEMP: dummy node uris
-		nodeURIs := []string{"endpoint1", "endpoint2", "endpoint3"}
+		nodeURIs := strings.Split(os.Getenv("NODE_URIS"), ",")
 		m := workers.NewMasterNode(nodeURIs)
 		m.Start()
 	default:
-		panic(fmt.Errorf("not a valid node type"))
+		panic(fmt.Errorf("'%s' not a valid node type", nodeType))
 	}
 }
