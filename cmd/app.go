@@ -11,8 +11,6 @@ import (
 
 func main() {
 
-	// TODO: have an interface for nodes
-
 	nodeType := os.Getenv("NODE_TYPE")
 
 	switch nodeType {
@@ -24,9 +22,9 @@ func main() {
 		}
 		p.Start()
 	case "stack":
-		// TODO: create stack node
+		s := workers.NewStackNode()
+		s.Start()
 	case "master":
-		// TEMP: dummy node uris
 		nodeURIs := strings.Split(os.Getenv("NODE_URIS"), ",")
 		m := workers.NewMasterNode(nodeURIs)
 		m.Start()

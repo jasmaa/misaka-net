@@ -11,6 +11,11 @@
   - Stack Nodes
     - `stack`: Holds some number of ints in a stack.
 
+## Added Instructions
+  - `PUSH <VAL>, <LOC>`: Pushes `<VAL>` to stack node at `<LOC>`. Fails if `<LOC>` not stack node.
+  - `PUSH <SRC>, <LOC>`: Pushes value in `<SRC>` to stack node at `<LOC>`. Fails if `<LOC>` not stack node.
+  - `POP <LOC>, <SRC>`: Pops head from stack node at `<LOC>` to `<SRC>` on machine. Fails if `<LOC>` not stack node.
+
 ## Worker Node Types
   - `tis`: Functions to work with TIS-100-like asm
   
@@ -31,4 +36,5 @@
     
     - `stack`: Stack node
       - `POST /reset`: Clears stack and registers
-      - `POST /send`: Pushes data on head
+      - `POST /push`: Pushes data on head
+      - `POST /pop`: Pops data from head
