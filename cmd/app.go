@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jasmaa/misaka-net/internal/workers"
+	"github.com/jasmaa/misaka-net/internal/nodes"
 )
 
 func main() {
@@ -15,18 +15,18 @@ func main() {
 
 	switch nodeType {
 	case "program":
-		p := workers.NewProgramNode()
+		p := nodes.NewProgramNode()
 		err := p.Load(os.Getenv("PROGRAM"))
 		if err != nil {
 			log.Printf("Could not load default program: %s", err.Error())
 		}
 		p.Start()
 	case "stack":
-		s := workers.NewStackNode()
+		s := nodes.NewStackNode()
 		s.Start()
 	case "master":
 		nodeURIs := strings.Split(os.Getenv("NODE_URIS"), ",")
-		m := workers.NewMasterNode(nodeURIs)
+		m := nodes.NewMasterNode(nodeURIs)
 		m.Start()
 	default:
 		panic(fmt.Errorf("'%s' not a valid node type", nodeType))
