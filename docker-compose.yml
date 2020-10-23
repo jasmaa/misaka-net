@@ -27,9 +27,21 @@ services:
       PROGRAM: |
         MOV R0, ACC
         ADD 1
+        PUSH ACC, misaka3
+        POP misaka3, ACC
         MOV ACC, misaka1:R0
     command: ./app
     
+  misaka3:
+    build: .
+    expose:
+      - 8000
+    networks:
+      - default
+    environment: 
+      NODE_TYPE: stack
+    command: ./app
+
   last_order:
     build: .
     ports:
@@ -40,7 +52,7 @@ services:
       - 8000
     environment:
       NODE_TYPE: master
-      NODE_URIS: misaka1,misaka2
+      NODE_URIS: misaka1,misaka2,misaka3
     command: ./app
 
 networks:

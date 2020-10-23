@@ -14,7 +14,7 @@
 ## Added Instructions
   - `PUSH <VAL>, <DST>`: Pushes `<VAL>` to stack node at `<DST>`. Fails if `<DST>` not stack node.
   - `PUSH <SRC>, <DST>`: Pushes value in `<SRC>` to stack node at `<LOC>`. Fails if `<DST>` not stack node.
-  - `POP <SRC>, <DST>`: Pops head from stack node at `<SRC>` to `<DST>` on machine. Fails if `<SRC>` not stack node.
+  - `POP <SRC>`: Pops head from stack node at `<SRC>` to `ACC` on machine. Fails if `<SRC>` not stack node.
 
 ## Worker Node Types
   - `tis`: Functions to work with TIS-100-like asm

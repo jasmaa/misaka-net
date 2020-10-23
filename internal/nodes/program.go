@@ -2,7 +2,9 @@ package nodes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -76,7 +78,7 @@ func (p *ProgramNode) Start() {
 		case "POST":
 			if !p.isRunning {
 				p.Run()
-				log.Printf("Node is running")
+				log.Printf("Node was run")
 			} else {
 				log.Printf("Node is already running")
 			}
@@ -91,7 +93,7 @@ func (p *ProgramNode) Start() {
 		case "POST":
 			if p.isRunning {
 				p.Pause()
-				log.Printf("Node is paused")
+				log.Printf("Node was paused")
 			} else {
 				log.Printf("Node is already paused")
 			}
@@ -234,6 +236,7 @@ func (p *ProgramNode) Load(s string) error {
 func (p *ProgramNode) update() error {
 	tokens := p.asm[p.ptr]
 
+	// TODO: remove this
 	log.Printf("%v\nACC: %v\nBAK: %v\n", tokens, p.acc, p.bak)
 
 	switch tokens[0] {
@@ -279,7 +282,6 @@ func (p *ProgramNode) update() error {
 		}
 	case "MOV_SRC_NETWORK":
 		// Moves value from src across network
-		// TODO: reduce code reuse
 		v, err := p.getFromSrc(tokens[1])
 		if err != nil {
 			return err
@@ -376,6 +378,37 @@ func (p *ProgramNode) update() error {
 		}
 		p.ptr = utils.IntClamp(p.ptr+v, 0, len(p.asm)-1)
 		return nil
+	case "PUSH_VAL":
+		// Moves value across network
+		v, err := strconv.Atoi(tokens[1])
+		if err != nil {
+			return err
+		}
+		err = p.pushValue(v, tokens[2])
+		if err != nil {
+			return err
+		}
+	case "PUSH_SRC":
+		// Moves value from src across network
+		v, err := p.getFromSrc(tokens[1])
+		if err != nil {
+			return err
+		}
+		err = p.pushValue(v, tokens[2])
+		if err != nil {
+			return err
+		}
+	case "POP":
+		v, err := p.popValue(tokens[1])
+		if err != nil {
+			return err
+		}
+		switch tokens[2] {
+		case "ACC":
+			p.acc = v
+		case "NIL":
+			// no-op
+		}
 	default:
 		return fmt.Errorf("'%v' not a valid instruction", tokens)
 	}
@@ -460,4 +493,66 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 	}
 
 	return fmt.Errorf("'%s' not a valid network register", target)
+}
+
+// pushValue pushes value to target in network
+func (p *ProgramNode) pushValue(v int, targetURI string) error {
+
+	payload := url.Values{}
+	payload.Set("value", strconv.Itoa(v))
+
+	client := http.DefaultClient
+	req, _ := http.NewRequestWithContext(
+		p.ctx,
+		"POST",
+		fmt.Sprintf("http://%s:8000/push", targetURI),
+		strings.NewReader(payload.Encode()),
+	)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Push was not successful")
+	}
+
+	return nil
+}
+
+// popValue pops value from source in network
+func (p *ProgramNode) popValue(sourceURI string) (int, error) {
+
+	client := http.DefaultClient
+	req, _ := http.NewRequestWithContext(
+		p.ctx,
+		"POST",
+		fmt.Sprintf("http://%s:8000/pop", sourceURI),
+		nil,
+	)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return -1, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return -1, fmt.Errorf("Pop was not successful")
+	}
+
+	// Parse popped value
+	body, _ := ioutil.ReadAll(resp.Body)
+	var popData popResponse
+
+	err = json.Unmarshal(body, &popData)
+	if err != nil {
+		return -1, err
+	}
+
+	return popData.Value, nil
 }

@@ -41,6 +41,7 @@ func (s *StackNode) Start() {
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
+			log.Printf("Node was run")
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -50,6 +51,7 @@ func (s *StackNode) Start() {
 	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
+			log.Printf("Node was paused")
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -60,15 +62,7 @@ func (s *StackNode) Start() {
 		switch r.Method {
 		case "POST":
 			s.Reset()
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
+			log.Printf("Node was paused and reset")
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -92,6 +86,7 @@ func (s *StackNode) Start() {
 			s.stack.Push(v)
 
 			fmt.Fprintf(w, "Success")
+			log.Printf("Value was pushed")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -109,6 +104,7 @@ func (s *StackNode) Start() {
 
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(popResponse{Value: v})
+			log.Printf("Value was popped")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
