@@ -2,6 +2,8 @@
 
 TIS-100-like distributed computing
 
+![Network diagram](/docs/diagram.png)
+
 ## What is This?
 Misaka Net is a distributed computing system inspired by both the assembly programing game, TIS-100,
 and the Misaka Network from the Raildex franchise.
@@ -36,8 +38,6 @@ The network can be built and deployed with:
 
 The network is controlled by sending commands to the master node which
 sends them to a particular node or broadcasts them throughout the network.
-
-![Network diagram](/docs/diagram.png)
 
 In order to run all nodes, send a run request to the master node with:
 
