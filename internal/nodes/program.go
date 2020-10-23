@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jasmaa/misaka-net/internal/tis"
+	"github.com/jasmaa/misaka-net/internal/utils"
 )
 
 // Register buffer size
@@ -365,7 +366,7 @@ func (p *ProgramNode) update() error {
 		if err != nil {
 			return err
 		}
-		p.ptr = max(0, min(p.ptr+v, len(p.asm)-1))
+		p.ptr = utils.IntClamp(p.ptr+v, 0, len(p.asm)-1)
 		return nil
 	case "JRO_SRC":
 		// Jumps by value offset
@@ -373,7 +374,7 @@ func (p *ProgramNode) update() error {
 		if err != nil {
 			return err
 		}
-		p.ptr = max(0, min(p.ptr+v, len(p.asm)-1))
+		p.ptr = utils.IntClamp(p.ptr+v, 0, len(p.asm)-1)
 		return nil
 	default:
 		return fmt.Errorf("'%v' not a valid instruction", tokens)
@@ -459,20 +460,4 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 	}
 
 	return fmt.Errorf("'%s' not a valid network register", target)
-}
-
-// Max finds maximum of two ints
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// Min finds minimum of two ints
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
