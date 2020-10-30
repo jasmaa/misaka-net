@@ -39,6 +39,7 @@ func (m *MasterNode) Start() {
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
+			m.Run()
 			err := m.broadcastCommand("run")
 			if err != nil {
 				log.Print(err)
@@ -75,9 +76,7 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-
-			// TODO: do proper reset for master as well
-
+			m.Reset()
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -191,6 +190,19 @@ func (m *MasterNode) Start() {
 	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// Run runs master node
+func (m *MasterNode) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.ctx = ctx
+	m.cancel = cancel
+}
+
+// Reset resets master node
+func (m *MasterNode) Reset() {
+	m.cancel()
+	m.r0 = make(chan int)
 }
 
 // broadcastCommand broadcasts specified command to all known nodes in network

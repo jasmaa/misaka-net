@@ -1,9 +1,22 @@
 version: '3'
 
 services: 
+  last_order:
+    build: .
+    image: misaka_net
+    ports:
+      - "8000:8000" # Map for now
+    networks:
+      - default
+    expose:
+      - 8000
+    environment:
+      NODE_TYPE: master
+      NODE_URIS: misaka1,misaka2,misaka3
+    command: ./app
 
   misaka1:
-    build: .
+    image: misaka_net
     expose:
       - 8000
     networks:
@@ -17,7 +30,7 @@ services:
     command: ./app
     
   misaka2:
-    build: .
+    image: misaka_net
     expose:
       - 8000
     networks:
@@ -33,26 +46,13 @@ services:
     command: ./app
     
   misaka3:
-    build: .
+    image: misaka_net
     expose:
       - 8000
     networks:
       - default
     environment: 
       NODE_TYPE: stack
-    command: ./app
-
-  last_order:
-    build: .
-    ports:
-      - "8000:8000" # Map for now
-    networks:
-      - default
-    expose:
-      - 8000
-    environment:
-      NODE_TYPE: master
-      NODE_URIS: misaka1,misaka2,misaka3
     command: ./app
 
 networks:

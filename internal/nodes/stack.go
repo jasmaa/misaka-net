@@ -41,6 +41,7 @@ func (s *StackNode) Start() {
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
+			s.Run()
 			log.Printf("Node was run")
 			fmt.Fprintf(w, "Success")
 		default:
@@ -114,6 +115,13 @@ func (s *StackNode) Start() {
 	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// Run runs stack node
+func (s *StackNode) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancel = cancel
 }
 
 // Reset resets stack node

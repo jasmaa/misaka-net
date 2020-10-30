@@ -24,7 +24,7 @@ A single node can be setup by setting proper environment variables and building 
     make
     ./app
 
-### Deploy Network with Docker Compose
+### Deploy a network with Docker Compose
 
 The provided compose file sets up an example network with
 two program nodes that add and pass an integer back-and-forth
