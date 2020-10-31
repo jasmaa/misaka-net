@@ -27,8 +27,11 @@ A single node can be setup by setting proper environment variables and building 
 ### Deploy a network with Docker Compose
 
 The provided compose file sets up an example network with
-two program nodes that add and pass an integer back-and-forth
-with one of the program nodes also pushing and popping the value to and from a stack node.
+two program nodes and a stack node. In the example network, one program node receives
+input from the master node, adds 1 to the input, and passes it to the other program node
+which also adds 1 to it, pushes and pops it from the stack node, and then passes it back
+to the original program node. The original program node then sends the final
+value to the master node's output.
 
 The network can be built and deployed with:
 
@@ -59,6 +62,9 @@ will reset the network's execution and update the specified node:
     -d "program=<PROGRAM SOURCE>&targetURI=<TARGET URI>" \
     <DOCKER MACHINE IP>:8000/load
 
-The client can send and retrieve data through the master node:
+Once the network is running, the client can send inputs and receive computed results through the master node:
 
-    # TODO
+    curl -X POST \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "value=<VALUE>" \
+    <DOCKER MACHINE IP>:8000/compute
