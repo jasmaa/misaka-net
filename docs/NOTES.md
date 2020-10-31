@@ -15,6 +15,8 @@
   - `PUSH <VAL>, <DST>`: Pushes `<VAL>` to stack node at `<DST>`. Fails if `<DST>` not stack node.
   - `PUSH <SRC>, <DST>`: Pushes value in `<SRC>` to stack node at `<LOC>`. Fails if `<DST>` not stack node.
   - `POP <SRC>`: Pops head from stack node at `<SRC>` to `ACC` on machine. Fails if `<SRC>` not stack node.
+  - `IN <DST>`: Moves a value from input in master to `<DST>`
+  - `OUT <VAL/SRC>`: Moves `<VAL/SRC>` in master output
 
 ## Worker Node Types
   - `tis`: Functions to work with TIS-100-like asm

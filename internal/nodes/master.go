@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,10 +14,22 @@ import (
 // MasterNode is a master node
 type MasterNode struct {
 	nodeURIs []string
-	r0       chan int
+	inChan   chan int
+	outChan  chan int
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc
+	isRunning bool
+}
+
+// inResponse structures response to in request
+type inResponse struct {
+	Value int `json:"value"`
+}
+
+// clientOutResponse structures response to client output request
+type clientOutResponse struct {
+	Value int `json:"value"`
 }
 
 // NewMasterNode creates a new master node
@@ -24,7 +37,8 @@ func NewMasterNode(nodeURIs []string) *MasterNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MasterNode{
 		nodeURIs: nodeURIs,
-		r0:       make(chan int),
+		inChan:   make(chan int, bufferSize),
+		outChan:  make(chan int, bufferSize),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -61,6 +75,7 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("Error pausing network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
+			m.Pause()
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -117,6 +132,7 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
+			m.Reset()
 
 			// Send load command to target node
 			payload := url.Values{}
@@ -152,39 +168,76 @@ func (m *MasterNode) Start() {
 		}
 	})
 
-	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/in", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
+			select {
+			case v := <-m.inChan:
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(inResponse{Value: v})
+				log.Printf("Sent input value")
+			case <-m.ctx.Done():
+				http.Error(w, "Cannot send input value", http.StatusBadRequest)
+				log.Printf("input retrieval cancelled")
+			}
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
+	http.HandleFunc("/out", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "Cannot parse form", http.StatusBadRequest)
 				return
 			}
 
-			rx := r.FormValue("register")
 			v, err := strconv.Atoi(r.FormValue("value"))
 			if err != nil {
 				http.Error(w, "Cannot parse value", http.StatusBadRequest)
 				return
 			}
 
-			switch rx {
-			case "R0":
-				m.r0 <- v
-			default:
-				http.Error(w, "Not a valid register", http.StatusBadRequest)
-				return
-			}
+			m.outChan <- v
 
 			fmt.Fprintf(w, "Success")
-			log.Printf("Received value")
+			log.Printf("Received output value")
 
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	// TODO: add handler for retrieving output
+	http.HandleFunc("/compute", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			if !m.isRunning {
+				http.Error(w, "Network is not running", http.StatusBadRequest)
+				return
+			}
+
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				return
+			}
+
+			v, err := strconv.Atoi(r.FormValue("value"))
+			if err != nil {
+				http.Error(w, "Cannot parse value", http.StatusBadRequest)
+				return
+			}
+
+			m.inChan <- v
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(clientOutResponse{Value: <-m.outChan})
+			log.Printf("Value outputted")
+
+		default:
+			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	log.Printf("Starting server...")
 	if err := http.ListenAndServe(":8000", nil); err != nil {
@@ -194,15 +247,26 @@ func (m *MasterNode) Start() {
 
 // Run runs master node
 func (m *MasterNode) Run() {
+	m.isRunning = true
+
 	ctx, cancel := context.WithCancel(context.Background())
 	m.ctx = ctx
 	m.cancel = cancel
 }
 
+// Pause pauses asm execution
+func (m *MasterNode) Pause() {
+	m.cancel()
+	m.isRunning = false
+}
+
 // Reset resets master node
 func (m *MasterNode) Reset() {
 	m.cancel()
-	m.r0 = make(chan int)
+	m.isRunning = false
+
+	m.inChan = make(chan int, bufferSize)
+	m.outChan = make(chan int, bufferSize)
 }
 
 // broadcastCommand broadcasts specified command to all known nodes in network

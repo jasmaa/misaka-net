@@ -88,6 +88,15 @@ func Tokenize(instrArr []string, labelMap map[string]int) ([][]string, error) {
 		} else if m := regexp.MustCompile(`^POP\s+(\w+)\s*,\s+(ACC|NIL)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
 			// POP <SRC>, <DST>
 			asm[i] = []string{"POP", m[1], m[2]}
+		} else if m := regexp.MustCompile(`^IN\s+(ACC|NIL)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			// IN <DST>
+			asm[i] = []string{"IN", m[1]}
+		} else if m := regexp.MustCompile(`^OUT\s+(-?\d+)\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			// OUT <VAL>
+			asm[i] = []string{"OUT_VAL", m[1]}
+		} else if m := regexp.MustCompile(`^OUT\s+(ACC|NIL|R[0123])\s*$`).FindStringSubmatch(instr); len(m) > 0 {
+			// OUT <SRC>
+			asm[i] = []string{"OUT_SRC", m[1]}
 		} else {
 			return nil, fmt.Errorf("line %v, '%s' not a valid instruction", i, instr)
 		}

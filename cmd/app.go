@@ -15,7 +15,7 @@ func main() {
 
 	switch nodeType {
 	case "program":
-		p := nodes.NewProgramNode()
+		p := nodes.NewProgramNode(os.Getenv("MASTER_URI"))
 		err := p.Load(os.Getenv("PROGRAM"))
 		if err != nil {
 			log.Printf("Could not load default program: %s", err.Error())

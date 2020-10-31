@@ -22,6 +22,8 @@ const bufferSize = 1
 
 // ProgramNode is a program node that interprets TIS-100 asm
 type ProgramNode struct {
+	masterURI string
+
 	acc int
 	bak int
 	r0  chan int
@@ -39,18 +41,19 @@ type ProgramNode struct {
 }
 
 // NewProgramNode creates a new program node
-func NewProgramNode() *ProgramNode {
+func NewProgramNode(masterURI string) *ProgramNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ProgramNode{
-		acc:    0,
-		bak:    0,
-		r0:     make(chan int, bufferSize),
-		r1:     make(chan int, bufferSize),
-		r2:     make(chan int, bufferSize),
-		r3:     make(chan int, bufferSize),
-		asm:    [][]string{[]string{"NOP"}},
-		ctx:    ctx,
-		cancel: cancel,
+		masterURI: masterURI,
+		acc:       0,
+		bak:       0,
+		r0:        make(chan int, bufferSize),
+		r1:        make(chan int, bufferSize),
+		r2:        make(chan int, bufferSize),
+		r3:        make(chan int, bufferSize),
+		asm:       [][]string{[]string{"NOP"}},
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 }
 
@@ -409,6 +412,35 @@ func (p *ProgramNode) update() error {
 		case "NIL":
 			// no-op
 		}
+	case "IN":
+		v, err := p.inputValue()
+		if err != nil {
+			return err
+		}
+		switch tokens[1] {
+		case "ACC":
+			p.acc = v
+		case "NIL":
+			// no-op
+		}
+	case "OUT_VAL":
+		v, err := strconv.Atoi(tokens[1])
+		if err != nil {
+			return err
+		}
+		err = p.outputValue(v)
+		if err != nil {
+			return err
+		}
+	case "OUT_SRC":
+		v, err := p.getFromSrc(tokens[1])
+		if err != nil {
+			return err
+		}
+		err = p.outputValue(v)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("'%v' not a valid instruction", tokens)
 	}
@@ -555,4 +587,66 @@ func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 	}
 
 	return popData.Value, nil
+}
+
+// inputValue gets an input value from master node
+func (p *ProgramNode) inputValue() (int, error) {
+
+	client := http.DefaultClient
+	req, _ := http.NewRequestWithContext(
+		p.ctx,
+		"POST",
+		fmt.Sprintf("http://%s:8000/in", p.masterURI),
+		nil,
+	)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return -1, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return -1, fmt.Errorf("Input retrieval was not successful")
+	}
+
+	// Parse input value
+	body, _ := ioutil.ReadAll(resp.Body)
+	var inData inResponse
+
+	err = json.Unmarshal(body, &inData)
+	if err != nil {
+		return -1, err
+	}
+
+	return inData.Value, nil
+}
+
+// outputValue outputs value to master node
+func (p *ProgramNode) outputValue(v int) error {
+
+	payload := url.Values{}
+	payload.Set("value", strconv.Itoa(v))
+
+	client := http.DefaultClient
+	req, _ := http.NewRequestWithContext(
+		p.ctx,
+		"POST",
+		fmt.Sprintf("http://%s:8000/out", p.masterURI),
+		strings.NewReader(payload.Encode()),
+	)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Output send was not successful")
+	}
+
+	return nil
 }
