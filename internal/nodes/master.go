@@ -36,11 +36,6 @@ type MasterNode struct {
 	pb.UnimplementedMasterServer
 }
 
-// inResponse structures response to in request
-type inResponse struct {
-	Value int `json:"value"`
-}
-
 // clientOutResponse structures response to client output request
 type clientOutResponse struct {
 	Value int `json:"value"`
@@ -62,7 +57,7 @@ func NewMasterNode(nodeInfo map[string]NodeInfo) *MasterNode {
 func (m *MasterNode) Start() {
 
 	// TODO: authenticate commands from master with key
-	// TODO: switch to faster protocol (grpc?)
+
 	go func() {
 		lis, err := net.Listen("tcp", grpcPort)
 		if err != nil {
@@ -70,7 +65,7 @@ func (m *MasterNode) Start() {
 		}
 		server := grpc.NewServer()
 		pb.RegisterMasterServer(server, m)
-		log.Printf("starting server...")
+		log.Printf("starting grpc server...")
 		if err := server.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}
@@ -280,6 +275,7 @@ func (m *MasterNode) broadcastCommand(cmd string) error {
 	return nil
 }
 
+// broadcastCommandProgram broadcasts command to program nodes
 func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
@@ -307,6 +303,7 @@ func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error
 	return nil
 }
 
+// broadcastCommandStack broadcasts command to stack nodes
 func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {

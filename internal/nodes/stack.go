@@ -23,11 +23,6 @@ type StackNode struct {
 	pb.UnimplementedStackServer
 }
 
-// popResponse structures response to pop request
-type popResponse struct {
-	Value int `json:"value"`
-}
-
 // NewStackNode creates a new stack node
 func NewStackNode() *StackNode {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -46,7 +41,7 @@ func (s *StackNode) Start() {
 	}
 	server := grpc.NewServer()
 	pb.RegisterStackServer(server, s)
-	log.Printf("starting server...")
+	log.Printf("starting grpc server...")
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

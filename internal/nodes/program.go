@@ -75,7 +75,6 @@ func (p *ProgramNode) Start() {
 	}()
 
 	// TODO: authenticate commands from master with key
-	// TODO: switch to faster protocol (grpc?)
 
 	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
@@ -83,7 +82,7 @@ func (p *ProgramNode) Start() {
 	}
 	server := grpc.NewServer()
 	pb.RegisterProgramServer(server, p)
-	log.Printf("starting server...")
+	log.Printf("starting grpc server...")
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
