@@ -4,6 +4,11 @@ package grpc;
 
 option go_package = "github.com/jasmaa/misaka-net/internal/grpc";
 
+service Master {
+  rpc GetInput(InputValueRequest) returns (ValueReply) {}
+  rpc SendOutput(OutputValueRequest) returns (CommandReply) {}
+}
+
 service Program {
   rpc Run(RunRequest) returns (CommandReply) {}
   rpc Pause(PauseRequest) returns (CommandReply) {}
@@ -13,7 +18,8 @@ service Program {
 }
 
 service Stack {
-  rpc GetValue(GetValueRequest) returns (ValueReply) {}
+  rpc Push(PushValueRequest) returns (CommandReply) {}
+  rpc Pop(PopValueRequest) returns (ValueReply) {}
 }
 
 message RunRequest {}
@@ -33,9 +39,19 @@ message SendValueRequest {
 
 message GetValueRequest {}
 
-message CommandReply {
-  bool success = 1;
+message PushValueRequest {
+  sint32 value = 1;
 }
+
+message PopValueRequest {}
+
+message OutputValueRequest {
+  sint32 value = 1;
+}
+
+message InputValueRequest {}
+
+message CommandReply {}
 
 message ValueReply {
   sint32 value = 1;

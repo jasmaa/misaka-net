@@ -33,18 +33,18 @@ func main() {
 		if err != nil {
 			log.Fatalf("could not run: %v", err)
 		}
-		log.Printf("Success?: %s", r.GetSuccess())
+		log.Printf("Resp: %v", r)
 	case "pause":
 		r, err := c.Pause(ctx, &pb.PauseRequest{})
 		if err != nil {
 			log.Fatalf("could not run: %v", err)
 		}
-		log.Printf("Success?: %s", r.GetSuccess())
+		log.Printf("Resp: %v", r)
 	case "reset":
 		r, err := c.Reset(ctx, &pb.ResetRequest{})
 		if err != nil {
 			log.Fatalf("could not run: %v", err)
 		}
-		log.Printf("Success?: %s", r.GetSuccess())
+		log.Printf("Resp: %v", r)
 	}
 }

@@ -2,13 +2,9 @@ package nodes
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -104,7 +100,7 @@ func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandRe
 	} else {
 		log.Printf("node is already running")
 	}
-	return &pb.CommandReply{Success: true}, nil
+	return &pb.CommandReply{}, nil
 }
 
 // Pause pauses asm execution
@@ -116,14 +112,14 @@ func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.Comma
 	} else {
 		log.Printf("node is already paused")
 	}
-	return &pb.CommandReply{Success: true}, nil
+	return &pb.CommandReply{}, nil
 }
 
 // Reset resets asm execution and registers
 func (p *ProgramNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
 	p.resetNode()
 	log.Printf("node was reset")
-	return &pb.CommandReply{Success: true}, nil
+	return &pb.CommandReply{}, nil
 }
 
 // LoadProgram loads program onto node
@@ -151,7 +147,7 @@ func (p *ProgramNode) Load(ctx context.Context, in *pb.LoadRequest) (*pb.Command
 	if err != nil {
 		return nil, err
 	}
-	return &pb.CommandReply{Success: true}, nil
+	return &pb.CommandReply{}, nil
 }
 
 // SendValue sends value to
@@ -169,7 +165,7 @@ func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*
 		return nil, fmt.Errorf("not a valid register")
 	}
 	log.Printf("received value")
-	return &pb.CommandReply{Success: true}, nil
+	return &pb.CommandReply{}, nil
 }
 
 // resetNode resets program node
@@ -448,32 +444,30 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 func (p *ProgramNode) sendValue(v int, target string) error {
 	if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(target); len(m) > 0 {
 		targetURI := m[1]
-		register := m[2]
 
-		payload := url.Values{}
-		payload.Set("register", register)
-		payload.Set("value", strconv.Itoa(v))
+		// TODO: change parser to get ints
+		var register int32
+		switch m[2] {
+		case "R0":
+			register = 0
+		case "R1":
+			register = 1
+		case "R2":
+			register = 2
+		case "R3":
+			register = 3
+		}
 
-		client := http.DefaultClient
-		req, _ := http.NewRequestWithContext(
-			p.ctx,
-			"POST",
-			fmt.Sprintf("http://%s:8000/send", targetURI),
-			strings.NewReader(payload.Encode()),
-		)
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-		resp, err := client.Do(req)
+		conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Fatalf("did not connect: %v", err)
+		}
+		defer conn.Close()
+		c := pb.NewProgramClient(conn)
+		_, err = c.SendValue(p.ctx, &pb.SendValueRequest{Register: register, Value: int32(v)})
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			return fmt.Errorf("Network move was not successful")
-		}
-
 		return nil
 	}
 
@@ -482,124 +476,60 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 
 // pushValue pushes value to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
-
-	payload := url.Values{}
-	payload.Set("value", strconv.Itoa(v))
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/push", targetURI),
-		strings.NewReader(payload.Encode()),
-	)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewStackClient(conn)
+	_, err = c.Push(p.ctx, &pb.PushValueRequest{Value: int32(v)})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Push was not successful")
-	}
-
 	return nil
 }
 
 // popValue pops value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/pop", sourceURI),
-		nil,
-	)
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", sourceURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewStackClient(conn)
+	r, err := c.Pop(p.ctx, &pb.PopValueRequest{})
 	if err != nil {
 		return -1, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return -1, fmt.Errorf("Pop was not successful")
-	}
-
-	// Parse popped value
-	body, _ := ioutil.ReadAll(resp.Body)
-	var popData popResponse
-
-	err = json.Unmarshal(body, &popData)
-	if err != nil {
-		return -1, err
-	}
-
-	return popData.Value, nil
+	return int(r.GetValue()), nil
 }
 
 // inputValue gets an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/in", p.masterURI),
-		nil,
-	)
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", p.masterURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewMasterClient(conn)
+	r, err := c.GetInput(p.ctx, &pb.InputValueRequest{})
 	if err != nil {
 		return -1, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return -1, fmt.Errorf("Input retrieval was not successful")
-	}
-
-	// Parse input value
-	body, _ := ioutil.ReadAll(resp.Body)
-	var inData inResponse
-
-	err = json.Unmarshal(body, &inData)
-	if err != nil {
-		return -1, err
-	}
-
-	return inData.Value, nil
+	return int(r.GetValue()), nil
 }
 
 // outputValue outputs value to master node
 func (p *ProgramNode) outputValue(v int) error {
-
-	payload := url.Values{}
-	payload.Set("value", strconv.Itoa(v))
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/out", p.masterURI),
-		strings.NewReader(payload.Encode()),
-	)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", p.masterURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewMasterClient(conn)
+	_, err = c.SendOutput(p.ctx, &pb.OutputValueRequest{Value: int32(v)})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Output send was not successful")
-	}
-
 	return nil
 }

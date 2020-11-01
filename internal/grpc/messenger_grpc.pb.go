@@ -13,6 +13,125 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
+// MasterClient is the client API for Master service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type MasterClient interface {
+	GetInput(ctx context.Context, in *InputValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
+	SendOutput(ctx context.Context, in *OutputValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
+}
+
+type masterClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
+	return &masterClient{cc}
+}
+
+func (c *masterClient) GetInput(ctx context.Context, in *InputValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
+	out := new(ValueReply)
+	err := c.cc.Invoke(ctx, "/grpc.Master/GetInput", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) SendOutput(ctx context.Context, in *OutputValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Master/SendOutput", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// MasterServer is the server API for Master service.
+// All implementations must embed UnimplementedMasterServer
+// for forward compatibility
+type MasterServer interface {
+	GetInput(context.Context, *InputValueRequest) (*ValueReply, error)
+	SendOutput(context.Context, *OutputValueRequest) (*CommandReply, error)
+	mustEmbedUnimplementedMasterServer()
+}
+
+// UnimplementedMasterServer must be embedded to have forward compatible implementations.
+type UnimplementedMasterServer struct {
+}
+
+func (UnimplementedMasterServer) GetInput(context.Context, *InputValueRequest) (*ValueReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInput not implemented")
+}
+func (UnimplementedMasterServer) SendOutput(context.Context, *OutputValueRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendOutput not implemented")
+}
+func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
+
+// UnsafeMasterServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MasterServer will
+// result in compilation errors.
+type UnsafeMasterServer interface {
+	mustEmbedUnimplementedMasterServer()
+}
+
+func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
+	s.RegisterService(&_Master_serviceDesc, srv)
+}
+
+func _Master_GetInput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InputValueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetInput(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Master/GetInput",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetInput(ctx, req.(*InputValueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_SendOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OutputValueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).SendOutput(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Master/SendOutput",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).SendOutput(ctx, req.(*OutputValueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _Master_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.Master",
+	HandlerType: (*MasterServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetInput",
+			Handler:    _Master_GetInput_Handler,
+		},
+		{
+			MethodName: "SendOutput",
+			Handler:    _Master_SendOutput_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internal/grpc/messenger.proto",
+}
+
 // ProgramClient is the client API for Program service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -244,7 +363,8 @@ var _Program_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StackClient interface {
-	GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
+	Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
 }
 
 type stackClient struct {
@@ -255,9 +375,18 @@ func NewStackClient(cc grpc.ClientConnInterface) StackClient {
 	return &stackClient{cc}
 }
 
-func (c *stackClient) GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
+func (c *stackClient) Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/Push", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stackClient) Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
 	out := new(ValueReply)
-	err := c.cc.Invoke(ctx, "/grpc.Stack/GetValue", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/Pop", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +397,8 @@ func (c *stackClient) GetValue(ctx context.Context, in *GetValueRequest, opts ..
 // All implementations must embed UnimplementedStackServer
 // for forward compatibility
 type StackServer interface {
-	GetValue(context.Context, *GetValueRequest) (*ValueReply, error)
+	Push(context.Context, *PushValueRequest) (*CommandReply, error)
+	Pop(context.Context, *PopValueRequest) (*ValueReply, error)
 	mustEmbedUnimplementedStackServer()
 }
 
@@ -276,8 +406,11 @@ type StackServer interface {
 type UnimplementedStackServer struct {
 }
 
-func (UnimplementedStackServer) GetValue(context.Context, *GetValueRequest) (*ValueReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetValue not implemented")
+func (UnimplementedStackServer) Push(context.Context, *PushValueRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Push not implemented")
+}
+func (UnimplementedStackServer) Pop(context.Context, *PopValueRequest) (*ValueReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Pop not implemented")
 }
 func (UnimplementedStackServer) mustEmbedUnimplementedStackServer() {}
 
@@ -292,20 +425,38 @@ func RegisterStackServer(s grpc.ServiceRegistrar, srv StackServer) {
 	s.RegisterService(&_Stack_serviceDesc, srv)
 }
 
-func _Stack_GetValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetValueRequest)
+func _Stack_Push_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushValueRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(StackServer).GetValue(ctx, in)
+		return srv.(StackServer).Push(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.Stack/GetValue",
+		FullMethod: "/grpc.Stack/Push",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).GetValue(ctx, req.(*GetValueRequest))
+		return srv.(StackServer).Push(ctx, req.(*PushValueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Stack_Pop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PopValueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StackServer).Pop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Stack/Pop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StackServer).Pop(ctx, req.(*PopValueRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -315,8 +466,12 @@ var _Stack_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*StackServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetValue",
-			Handler:    _Stack_GetValue_Handler,
+			MethodName: "Push",
+			Handler:    _Stack_Push_Handler,
+		},
+		{
+			MethodName: "Pop",
+			Handler:    _Stack_Pop_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
