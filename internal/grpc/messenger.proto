@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "github.com/jasmaa/misaka-net/internal/grpc";
+
+service Messenger {
+  rpc SendValue(SendValueRequest) returns (SendValueReply) {}
+  rpc GetValue(GetValueRequest) returns (GetValueReply) {}
+}
+
+message SendValueRequest {
+  sint32 value = 1;
+}
+
+message SendValueReply {
+  bool success = 1;
+}  
+
+message GetValueRequest {
+}
+
+message GetValueReply {
+  sint32 value = 1;
+}
