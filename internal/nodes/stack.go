@@ -16,8 +16,9 @@ import (
 type StackNode struct {
 	stack *utils.IntStack
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc
+	isRunning bool
 
 	pb.UnimplementedStackServer
 }
@@ -39,7 +40,7 @@ func NewStackNode() *StackNode {
 
 // Start starts stack node
 func (s *StackNode) Start() {
-	lis, err := net.Listen("tcp", ":8000")
+	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -53,22 +54,36 @@ func (s *StackNode) Start() {
 
 // Run runs stack node
 func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	s.ctx = ctx
-	s.cancel = cancel
+	if !s.isRunning {
+		s.isRunning = true
+		nodeCtx, cancel := context.WithCancel(context.Background())
+		s.ctx = nodeCtx
+		s.cancel = cancel
+		log.Printf("node was run")
+	} else {
+		log.Printf("node is already running")
+	}
 	return &pb.CommandReply{}, nil
 }
 
 // Pause pauses stack node
 func (s *StackNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
-	s.cancel()
+	if s.isRunning {
+		s.stopNode()
+		log.Printf("node was paused")
+	} else {
+		log.Printf("node is already paused")
+	}
 	return &pb.CommandReply{}, nil
 }
 
 // Reset resets stack node
 func (s *StackNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
-	s.cancel()
-	s.stack.Clear()
+	if s.isRunning {
+		s.stopNode()
+	}
+	s.resetNode()
+	log.Printf("node was reset")
 	return &pb.CommandReply{}, nil
 }
 
@@ -85,6 +100,17 @@ func (s *StackNode) Pop(ctx context.Context, in *pb.PopValueRequest) (*pb.ValueR
 		return nil, err
 	}
 	return &pb.ValueReply{Value: int32(v)}, nil
+}
+
+// stopNode stops stack node
+func (s *StackNode) stopNode() {
+	s.cancel()
+	s.isRunning = false
+}
+
+// resetNode resets stack node
+func (s *StackNode) resetNode() {
+	s.stack.Clear()
 }
 
 // waitPop waits until value can be popped from stack and returns value

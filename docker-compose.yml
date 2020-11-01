@@ -10,6 +10,7 @@ services:
       - default
     expose:
       - 8000
+      - 8001
     environment:
       NODE_TYPE: master
       NODE_INFO: |
@@ -23,7 +24,7 @@ services:
   misaka1:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 
@@ -40,7 +41,7 @@ services:
   misaka2:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 
@@ -57,7 +58,7 @@ services:
   misaka3:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 

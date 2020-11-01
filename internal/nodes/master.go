@@ -5,11 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"google.golang.org/grpc"
+)
+
+const (
+	clientPort = ":8000"
+	grpcPort   = ":8001"
 )
 
 // NodeInfo contains information about nodes
@@ -27,7 +33,7 @@ type MasterNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
-	pb.UnimplementedStackServer
+	pb.UnimplementedMasterServer
 }
 
 // inResponse structures response to in request
@@ -57,13 +63,25 @@ func (m *MasterNode) Start() {
 
 	// TODO: authenticate commands from master with key
 	// TODO: switch to faster protocol (grpc?)
+	go func() {
+		lis, err := net.Listen("tcp", grpcPort)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		server := grpc.NewServer()
+		pb.RegisterMasterServer(server, m)
+		log.Printf("starting server...")
+		if err := server.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
 
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			m.isRunning = true
-			ctx, cancel := context.WithCancel(context.Background())
-			m.ctx = ctx
+			nodeCtx, cancel := context.WithCancel(context.Background())
+			m.ctx = nodeCtx
 			m.cancel = cancel
 
 			err := m.broadcastCommand("run")
@@ -89,8 +107,9 @@ func (m *MasterNode) Start() {
 				return
 			}
 
-			m.cancel()
-			m.isRunning = false
+			if !m.isRunning {
+				m.stopNode()
+			}
 
 			fmt.Fprintf(w, "Success")
 		default:
@@ -106,6 +125,9 @@ func (m *MasterNode) Start() {
 				log.Print(err)
 				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
+			}
+			if !m.isRunning {
+				m.stopNode()
 			}
 			m.resetNode()
 			fmt.Fprintf(w, "Success")
@@ -163,23 +185,6 @@ func (m *MasterNode) Start() {
 		}
 	})
 
-	http.HandleFunc("/in", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			select {
-			case v := <-m.inChan:
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(inResponse{Value: v})
-				log.Printf("Sent input value")
-			case <-m.ctx.Done():
-				http.Error(w, "Cannot send input value", http.StatusBadRequest)
-				log.Printf("input retrieval cancelled")
-			}
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
 	http.HandleFunc("/compute", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -204,14 +209,13 @@ func (m *MasterNode) Start() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(clientOutResponse{Value: <-m.outChan})
 			log.Printf("Value outputted")
-
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	log.Printf("Starting server...")
-	if err := http.ListenAndServe(":8000", nil); err != nil {
+	log.Printf("starting http server...")
+	if err := http.ListenAndServe(clientPort, nil); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -220,7 +224,7 @@ func (m *MasterNode) Start() {
 func (m *MasterNode) GetInput(ctx context.Context, in *pb.InputValueRequest) (*pb.ValueReply, error) {
 	select {
 	case v := <-m.inChan:
-		log.Printf("Sent input value")
+		log.Printf("sent input value")
 		return &pb.ValueReply{Value: int32(v)}, nil
 	case <-m.ctx.Done():
 		log.Printf("input retrieval cancelled")
@@ -235,11 +239,14 @@ func (m *MasterNode) SendOutput(ctx context.Context, in *pb.OutputValueRequest) 
 	return &pb.CommandReply{}, nil
 }
 
-// resetNode resets master node
-func (m *MasterNode) resetNode() {
+// stopNode stops master node
+func (m *MasterNode) stopNode() {
 	m.cancel()
 	m.isRunning = false
+}
 
+// resetNode resets master node
+func (m *MasterNode) resetNode() {
 	m.inChan = make(chan int, bufferSize)
 	m.outChan = make(chan int, bufferSize)
 }
@@ -274,7 +281,7 @@ func (m *MasterNode) broadcastCommand(cmd string) error {
 }
 
 func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -301,7 +308,7 @@ func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error
 }
 
 func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

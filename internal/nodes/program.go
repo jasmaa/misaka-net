@@ -77,7 +77,7 @@ func (p *ProgramNode) Start() {
 	// TODO: authenticate commands from master with key
 	// TODO: switch to faster protocol (grpc?)
 
-	lis, err := net.Listen("tcp", ":8000")
+	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -93,8 +93,8 @@ func (p *ProgramNode) Start() {
 func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	if !p.isRunning {
 		p.isRunning = true
-		ctx, cancel := context.WithCancel(context.Background())
-		p.ctx = ctx
+		nodeCtx, cancel := context.WithCancel(context.Background())
+		p.ctx = nodeCtx
 		p.cancel = cancel
 		log.Printf("node was run")
 	} else {
@@ -106,8 +106,7 @@ func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandRe
 // Pause pauses asm execution
 func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
 	if p.isRunning {
-		p.cancel()
-		p.isRunning = false
+		p.stopNode()
 		log.Printf("node was paused")
 	} else {
 		log.Printf("node is already paused")
@@ -117,6 +116,9 @@ func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.Comma
 
 // Reset resets asm execution and registers
 func (p *ProgramNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
+	if p.isRunning {
+		p.stopNode()
+	}
 	p.resetNode()
 	log.Printf("node was reset")
 	return &pb.CommandReply{}, nil
@@ -168,12 +170,14 @@ func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*
 	return &pb.CommandReply{}, nil
 }
 
-// resetNode resets program node
-func (p *ProgramNode) resetNode() {
-	// Stop program execution
+// stopNode stops program execution
+func (p *ProgramNode) stopNode() {
 	p.cancel()
 	p.isRunning = false
+}
 
+// resetNode resets program node
+func (p *ProgramNode) resetNode() {
 	p.acc = 0
 	p.bak = 0
 	p.ptr = 0
@@ -458,7 +462,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 			register = 3
 		}
 
-		conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
@@ -476,7 +480,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 
 // pushValue pushes value to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -491,7 +495,7 @@ func (p *ProgramNode) pushValue(v int, targetURI string) error {
 
 // popValue pops value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", sourceURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -506,7 +510,7 @@ func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 
 // inputValue gets an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", p.masterURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -521,7 +525,7 @@ func (p *ProgramNode) inputValue() (int, error) {
 
 // outputValue outputs value to master node
 func (p *ProgramNode) outputValue(v int) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", p.masterURI), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
