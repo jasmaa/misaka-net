@@ -59,6 +59,12 @@ func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandRepl
 	return &pb.CommandReply{}, nil
 }
 
+// Pause pauses stack node
+func (s *StackNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
+	s.cancel()
+	return &pb.CommandReply{}, nil
+}
+
 // Reset resets stack node
 func (s *StackNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
 	s.cancel()

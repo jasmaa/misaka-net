@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/jasmaa/misaka-net/internal/nodes"
 )
@@ -12,7 +12,6 @@ import (
 func main() {
 
 	nodeType := os.Getenv("NODE_TYPE")
-	nodeType = "program"
 
 	switch nodeType {
 	case "program":
@@ -26,8 +25,12 @@ func main() {
 		s := nodes.NewStackNode()
 		s.Start()
 	case "master":
-		nodeURIs := strings.Split(os.Getenv("NODE_URIS"), ",")
-		m := nodes.NewMasterNode(nodeURIs)
+		var nodeInfo map[string]nodes.NodeInfo
+		err := json.Unmarshal([]byte(os.Getenv("NODE_INFO")), &nodeInfo)
+		if err != nil {
+			panic(fmt.Errorf("invalid node info"))
+		}
+		m := nodes.NewMasterNode(nodeInfo)
 		m.Start()
 	default:
 		panic(fmt.Errorf("'%s' not a valid node type", nodeType))

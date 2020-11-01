@@ -6,20 +6,28 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
+
+	pb "github.com/jasmaa/misaka-net/internal/grpc"
+	"google.golang.org/grpc"
 )
+
+// NodeInfo contains information about nodes
+type NodeInfo struct {
+	Type string `json:"type"`
+}
 
 // MasterNode is a master node
 type MasterNode struct {
-	nodeURIs []string
+	nodeInfo map[string]NodeInfo
 	inChan   chan int
 	outChan  chan int
 
 	ctx       context.Context
 	cancel    context.CancelFunc
 	isRunning bool
+
+	pb.UnimplementedStackServer
 }
 
 // inResponse structures response to in request
@@ -33,10 +41,10 @@ type clientOutResponse struct {
 }
 
 // NewMasterNode creates a new master node
-func NewMasterNode(nodeURIs []string) *MasterNode {
+func NewMasterNode(nodeInfo map[string]NodeInfo) *MasterNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MasterNode{
-		nodeURIs: nodeURIs,
+		nodeInfo: nodeInfo,
 		inChan:   make(chan int, bufferSize),
 		outChan:  make(chan int, bufferSize),
 		ctx:      ctx,
@@ -53,13 +61,18 @@ func (m *MasterNode) Start() {
 	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			m.Run()
+			m.isRunning = true
+			ctx, cancel := context.WithCancel(context.Background())
+			m.ctx = ctx
+			m.cancel = cancel
+
 			err := m.broadcastCommand("run")
 			if err != nil {
 				log.Print(err)
 				http.Error(w, fmt.Sprintf("Error running network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
+
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -75,7 +88,10 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("Error pausing network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-			m.Pause()
+
+			m.cancel()
+			m.isRunning = false
+
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -91,7 +107,7 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-			m.Reset()
+			m.resetNode()
 			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
@@ -111,17 +127,10 @@ func (m *MasterNode) Start() {
 			targetURI := r.FormValue("targetURI")
 
 			// Check if master knows target uri
-			isURIFound := false
-			for _, v := range m.nodeURIs {
-				if v == targetURI {
-					isURIFound = true
-					break
-				}
-			}
-			if !isURIFound {
+			if _, ok := m.nodeInfo[targetURI]; !ok {
 				err := fmt.Errorf("node %s not valid on this network", targetURI)
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error loading program on node %s: %s", targetURI, err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error loading program on node %s: %s", targetURI, err.Error()), http.StatusBadRequest)
 				return
 			}
 
@@ -129,40 +138,26 @@ func (m *MasterNode) Start() {
 			err := m.broadcastCommand("reset")
 			if err != nil {
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-			m.Reset()
+			m.resetNode()
 
 			// Send load command to target node
-			payload := url.Values{}
-			payload.Set("program", program)
-
-			client := http.DefaultClient
-			req, _ := http.NewRequestWithContext(
-				m.ctx,
-				"POST",
-				fmt.Sprintf("http://%s:8000/load", targetURI),
-				strings.NewReader(payload.Encode()),
-			)
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-			resp, err := client.Do(req)
+			conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+			if err != nil {
+				log.Fatalf("did not connect: %v", err)
+			}
+			defer conn.Close()
+			c := pb.NewProgramClient(conn)
+			_, err = c.Load(m.ctx, &pb.LoadRequest{Program: program})
 			if err != nil {
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error loading program on node %s: %s", targetURI, err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error loading program on node %s: %s", targetURI, err.Error()), http.StatusBadRequest)
 				return
 			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode == 200 {
-				log.Printf("Program was successfully loaded on node %s", targetURI)
-				fmt.Fprintf(w, "Success")
-			} else {
-				log.Printf("Error loading program on node %s", targetURI)
-				http.Error(w, fmt.Sprintf("Error loading program: %s", err.Error()), http.StatusBadRequest)
-			}
+			log.Printf("successfully loaded program")
+			fmt.Fprintf(w, "Success")
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -180,30 +175,6 @@ func (m *MasterNode) Start() {
 				http.Error(w, "Cannot send input value", http.StatusBadRequest)
 				log.Printf("input retrieval cancelled")
 			}
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/out", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			v, err := strconv.Atoi(r.FormValue("value"))
-			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
-				return
-			}
-
-			m.outChan <- v
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Received output value")
-
 		default:
 			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
 		}
@@ -245,23 +216,27 @@ func (m *MasterNode) Start() {
 	}
 }
 
-// Run runs master node
-func (m *MasterNode) Run() {
-	m.isRunning = true
-
-	ctx, cancel := context.WithCancel(context.Background())
-	m.ctx = ctx
-	m.cancel = cancel
+// GetInput gets input from master node
+func (m *MasterNode) GetInput(ctx context.Context, in *pb.InputValueRequest) (*pb.ValueReply, error) {
+	select {
+	case v := <-m.inChan:
+		log.Printf("Sent input value")
+		return &pb.ValueReply{Value: int32(v)}, nil
+	case <-m.ctx.Done():
+		log.Printf("input retrieval cancelled")
+		return nil, fmt.Errorf("input retrieval cancelled")
+	}
 }
 
-// Pause pauses asm execution
-func (m *MasterNode) Pause() {
-	m.cancel()
-	m.isRunning = false
+// SendOutput sends output to master node
+func (m *MasterNode) SendOutput(ctx context.Context, in *pb.OutputValueRequest) (*pb.CommandReply, error) {
+	m.outChan <- int(in.Value)
+	log.Printf("received output value")
+	return &pb.CommandReply{}, nil
 }
 
-// Reset resets master node
-func (m *MasterNode) Reset() {
+// resetNode resets master node
+func (m *MasterNode) resetNode() {
 	m.cancel()
 	m.isRunning = false
 
@@ -275,38 +250,79 @@ func (m *MasterNode) broadcastCommand(cmd string) error {
 	c := make(chan error)
 
 	// Send command to all nodes
-	for _, v := range m.nodeURIs {
-		go func(targetURI string) {
-			client := http.DefaultClient
-			req, _ := http.NewRequestWithContext(
-				m.ctx,
-				"POST",
-				fmt.Sprintf("http://%s:8000/%s", targetURI, cmd),
-				nil,
-			)
-
-			log.Printf("Sending command '%s' to node at %s...", cmd, targetURI)
-			resp, err := client.Do(req)
-			if err != nil {
-				c <- err
-				return
+	for k, v := range m.nodeInfo {
+		go func(cmd string, targetURI string, info NodeInfo) {
+			switch info.Type {
+			case "program":
+				c <- m.broadcastCommandProgram(cmd, targetURI)
+			case "stack":
+				c <- m.broadcastCommandStack(cmd, targetURI)
+			default:
+				c <- fmt.Errorf("invalid node type")
 			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode == 200 {
-				c <- nil
-			} else {
-				c <- fmt.Errorf("Error sending command '%s' to node at %s", cmd, targetURI)
-			}
-		}(v)
+		}(cmd, k, v)
 	}
 
 	// Check if all nodes were successful
-	for i := 0; i < len(m.nodeURIs); i++ {
+	for i := 0; i < len(m.nodeInfo); i++ {
 		if err := <-c; err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error {
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewProgramClient(conn)
+	switch cmd {
+	case "run":
+		_, err = c.Run(m.ctx, &pb.RunRequest{})
+		if err != nil {
+			return err
+		}
+	case "pause":
+		_, err = c.Pause(m.ctx, &pb.PauseRequest{})
+		if err != nil {
+			return err
+		}
+	case "reset":
+		_, err = c.Reset(m.ctx, &pb.ResetRequest{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
+	conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewStackClient(conn)
+	switch cmd {
+	case "run":
+		_, err = c.Run(m.ctx, &pb.RunRequest{})
+		if err != nil {
+			return err
+		}
+	case "pause":
+		_, err = c.Pause(m.ctx, &pb.PauseRequest{})
+		if err != nil {
+			return err
+		}
+	case "reset":
+		_, err = c.Reset(m.ctx, &pb.ResetRequest{})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

@@ -364,6 +364,7 @@ var _Program_serviceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StackClient interface {
 	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error)
 	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error)
 	Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
 	Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
@@ -380,6 +381,15 @@ func NewStackClient(cc grpc.ClientConnInterface) StackClient {
 func (c *stackClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error) {
 	out := new(CommandReply)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Run", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stackClient) Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/Pause", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -418,6 +428,7 @@ func (c *stackClient) Pop(ctx context.Context, in *PopValueRequest, opts ...grpc
 // for forward compatibility
 type StackServer interface {
 	Run(context.Context, *RunRequest) (*CommandReply, error)
+	Pause(context.Context, *PauseRequest) (*CommandReply, error)
 	Reset(context.Context, *ResetRequest) (*CommandReply, error)
 	Push(context.Context, *PushValueRequest) (*CommandReply, error)
 	Pop(context.Context, *PopValueRequest) (*ValueReply, error)
@@ -430,6 +441,9 @@ type UnimplementedStackServer struct {
 
 func (UnimplementedStackServer) Run(context.Context, *RunRequest) (*CommandReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
+}
+func (UnimplementedStackServer) Pause(context.Context, *PauseRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Pause not implemented")
 }
 func (UnimplementedStackServer) Reset(context.Context, *ResetRequest) (*CommandReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
@@ -467,6 +481,24 @@ func _Stack_Run_Handler(srv interface{}, ctx context.Context, dec func(interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StackServer).Run(ctx, req.(*RunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Stack_Pause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StackServer).Pause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Stack/Pause",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StackServer).Pause(ctx, req.(*PauseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -532,6 +564,10 @@ var _Stack_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Run",
 			Handler:    _Stack_Run_Handler,
+		},
+		{
+			MethodName: "Pause",
+			Handler:    _Stack_Pause_Handler,
 		},
 		{
 			MethodName: "Reset",
