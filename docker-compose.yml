@@ -10,15 +10,21 @@ services:
       - default
     expose:
       - 8000
+      - 8001
     environment:
       NODE_TYPE: master
-      NODE_URIS: misaka1,misaka2,misaka3
+      NODE_INFO: |
+        {
+          "misaka1": {"type": "program"},
+          "misaka2": {"type": "program"},
+          "misaka3": {"type": "stack"}
+        }
     command: ./app
 
   misaka1:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 
@@ -35,7 +41,7 @@ services:
   misaka2:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 
@@ -52,7 +58,7 @@ services:
   misaka3:
     image: misaka_net
     expose:
-      - 8000
+      - 8001
     networks:
       - default
     environment: 

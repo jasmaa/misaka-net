@@ -2,19 +2,18 @@ package nodes
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"net/url"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/tis"
 	"github.com/jasmaa/misaka-net/internal/utils"
+	"google.golang.org/grpc"
 )
 
 // Register buffer size
@@ -38,6 +37,8 @@ type ProgramNode struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	isRunning bool
+
+	pb.UnimplementedProgramServer
 }
 
 // NewProgramNode creates a new program node
@@ -74,152 +75,54 @@ func (p *ProgramNode) Start() {
 	}()
 
 	// TODO: authenticate commands from master with key
-	// TODO: switch to faster protocol (grpc?)
 
-	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if !p.isRunning {
-				p.Run()
-				log.Printf("Node was run")
-			} else {
-				log.Printf("Node is already running")
-			}
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if p.isRunning {
-				p.Pause()
-				log.Printf("Node was paused")
-			} else {
-				log.Printf("Node is already paused")
-			}
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			p.Reset()
-			log.Printf("Node was paused and reset")
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			program := r.FormValue("program")
-			err := p.Load(program)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Error loading program: %s", err.Error()), http.StatusBadRequest)
-				return
-			}
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Program was loaded")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			rx := r.FormValue("register")
-			v, err := strconv.Atoi(r.FormValue("value"))
-			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
-				return
-			}
-
-			switch rx {
-			case "R0":
-				p.r0 <- v
-			case "R1":
-				p.r1 <- v
-			case "R2":
-				p.r2 <- v
-			case "R3":
-				p.r3 <- v
-			default:
-				http.Error(w, "Not a valid register", http.StatusBadRequest)
-				return
-			}
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Received value")
-
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	log.Printf("Starting server...")
-	if err := http.ListenAndServe(":8000", nil); err != nil {
-		log.Fatal(err)
+	lis, err := net.Listen("tcp", grpcPort)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	server := grpc.NewServer()
+	pb.RegisterProgramServer(server, p)
+	log.Printf("starting grpc server...")
+	if err := server.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
 
 // Run starts asm execution
-func (p *ProgramNode) Run() {
-	p.isRunning = true
-
-	ctx, cancel := context.WithCancel(context.Background())
-	p.ctx = ctx
-	p.cancel = cancel
+func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
+	if !p.isRunning {
+		p.isRunning = true
+		log.Printf("node was run")
+	} else {
+		log.Printf("node is already running")
+	}
+	return &pb.CommandReply{}, nil
 }
 
 // Pause pauses asm execution
-func (p *ProgramNode) Pause() {
-	p.cancel()
-	p.isRunning = false
+func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
+	if p.isRunning {
+		p.stopNode()
+		log.Printf("node was paused")
+	} else {
+		log.Printf("node is already paused")
+	}
+	return &pb.CommandReply{}, nil
 }
 
 // Reset resets asm execution and registers
-func (p *ProgramNode) Reset() {
-	// Stop program execution
-	p.cancel()
-	p.isRunning = false
-
-	p.acc = 0
-	p.bak = 0
-	p.ptr = 0
-
-	p.r0 = make(chan int, bufferSize)
-	p.r1 = make(chan int, bufferSize)
-	p.r2 = make(chan int, bufferSize)
-	p.r3 = make(chan int, bufferSize)
+func (p *ProgramNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
+	if p.isRunning {
+		p.stopNode()
+	}
+	p.resetNode()
+	log.Printf("node was reset")
+	return &pb.CommandReply{}, nil
 }
 
-// Load resets node and loads asm program
-func (p *ProgramNode) Load(s string) error {
-	// Reset node
-	p.Reset()
-
+// LoadProgram loads program onto node
+func (p *ProgramNode) LoadProgram(s string) error {
 	instrArr := strings.Split(s, "\n")
-
 	labelMap, err := tis.GenerateLabelMap(instrArr)
 	if err != nil {
 		return err
@@ -233,6 +136,57 @@ func (p *ProgramNode) Load(s string) error {
 	p.asm = asm
 	p.labelMap = labelMap
 	return nil
+}
+
+// Load resets node and loads asm program
+func (p *ProgramNode) Load(ctx context.Context, in *pb.LoadRequest) (*pb.CommandReply, error) {
+	p.resetNode()
+	err := p.LoadProgram(in.Program)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CommandReply{}, nil
+}
+
+// SendValue sends value to
+func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*pb.CommandReply, error) {
+	switch in.Register {
+	case 0:
+		p.r0 <- int(in.Value)
+	case 1:
+		p.r1 <- int(in.Value)
+	case 2:
+		p.r2 <- int(in.Value)
+	case 3:
+		p.r3 <- int(in.Value)
+	default:
+		return nil, fmt.Errorf("not a valid register")
+	}
+	log.Printf("received value")
+	return &pb.CommandReply{}, nil
+}
+
+// stopNode stops program execution
+func (p *ProgramNode) stopNode() {
+	p.cancel()
+	p.isRunning = false
+
+	// Re-create context
+	nodeCtx, cancel := context.WithCancel(context.Background())
+	p.ctx = nodeCtx
+	p.cancel = cancel
+}
+
+// resetNode resets program node
+func (p *ProgramNode) resetNode() {
+	p.acc = 0
+	p.bak = 0
+	p.ptr = 0
+
+	p.r0 = make(chan int, bufferSize)
+	p.r1 = make(chan int, bufferSize)
+	p.r2 = make(chan int, bufferSize)
+	p.r3 = make(chan int, bufferSize)
 }
 
 // Update steps through asm
@@ -495,32 +449,30 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 func (p *ProgramNode) sendValue(v int, target string) error {
 	if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(target); len(m) > 0 {
 		targetURI := m[1]
-		register := m[2]
 
-		payload := url.Values{}
-		payload.Set("register", register)
-		payload.Set("value", strconv.Itoa(v))
+		// TODO: change parser to get ints
+		var register int32
+		switch m[2] {
+		case "R0":
+			register = 0
+		case "R1":
+			register = 1
+		case "R2":
+			register = 2
+		case "R3":
+			register = 3
+		}
 
-		client := http.DefaultClient
-		req, _ := http.NewRequestWithContext(
-			p.ctx,
-			"POST",
-			fmt.Sprintf("http://%s:8000/send", targetURI),
-			strings.NewReader(payload.Encode()),
-		)
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-		resp, err := client.Do(req)
+		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Fatalf("did not connect: %v", err)
+		}
+		defer conn.Close()
+		c := pb.NewProgramClient(conn)
+		_, err = c.SendValue(p.ctx, &pb.SendValueRequest{Register: register, Value: int32(v)})
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			return fmt.Errorf("Network move was not successful")
-		}
-
 		return nil
 	}
 
@@ -529,124 +481,60 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 
 // pushValue pushes value to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
-
-	payload := url.Values{}
-	payload.Set("value", strconv.Itoa(v))
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/push", targetURI),
-		strings.NewReader(payload.Encode()),
-	)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewStackClient(conn)
+	_, err = c.Push(p.ctx, &pb.PushValueRequest{Value: int32(v)})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Push was not successful")
-	}
-
 	return nil
 }
 
 // popValue pops value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/pop", sourceURI),
-		nil,
-	)
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewStackClient(conn)
+	r, err := c.Pop(p.ctx, &pb.PopValueRequest{})
 	if err != nil {
 		return -1, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return -1, fmt.Errorf("Pop was not successful")
-	}
-
-	// Parse popped value
-	body, _ := ioutil.ReadAll(resp.Body)
-	var popData popResponse
-
-	err = json.Unmarshal(body, &popData)
-	if err != nil {
-		return -1, err
-	}
-
-	return popData.Value, nil
+	return int(r.GetValue()), nil
 }
 
 // inputValue gets an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/in", p.masterURI),
-		nil,
-	)
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewMasterClient(conn)
+	r, err := c.GetInput(p.ctx, &pb.InputValueRequest{})
 	if err != nil {
 		return -1, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return -1, fmt.Errorf("Input retrieval was not successful")
-	}
-
-	// Parse input value
-	body, _ := ioutil.ReadAll(resp.Body)
-	var inData inResponse
-
-	err = json.Unmarshal(body, &inData)
-	if err != nil {
-		return -1, err
-	}
-
-	return inData.Value, nil
+	return int(r.GetValue()), nil
 }
 
 // outputValue outputs value to master node
 func (p *ProgramNode) outputValue(v int) error {
-
-	payload := url.Values{}
-	payload.Set("value", strconv.Itoa(v))
-
-	client := http.DefaultClient
-	req, _ := http.NewRequestWithContext(
-		p.ctx,
-		"POST",
-		fmt.Sprintf("http://%s:8000/out", p.masterURI),
-		strings.NewReader(payload.Encode()),
-	)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(payload.Encode())))
-
-	resp, err := client.Do(req)
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewMasterClient(conn)
+	_, err = c.SendOutput(p.ctx, &pb.OutputValueRequest{Value: int32(v)})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Output send was not successful")
-	}
-
 	return nil
 }

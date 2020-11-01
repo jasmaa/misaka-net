@@ -17,7 +17,11 @@ which broadcasts commands to all nodes and manages IO from the client.
 
 ## Setup
 
-### Single node locally
+Follow [gRPC setup instructions](https://grpc.io/docs/languages/go/quickstart/) re-generate gRPC Go code with:
+
+    make grpc
+
+### Deploy single node
 
 A single node can be setup by setting proper environment variables and building and running:
 
