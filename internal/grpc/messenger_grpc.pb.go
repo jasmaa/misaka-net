@@ -13,119 +13,310 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
-// MessengerClient is the client API for Messenger service.
+// ProgramClient is the client API for Program service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type MessengerClient interface {
-	SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*SendValueReply, error)
-	GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*GetValueReply, error)
+type ProgramClient interface {
+	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Load(ctx context.Context, in *LoadRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
 }
 
-type messengerClient struct {
+type programClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewMessengerClient(cc grpc.ClientConnInterface) MessengerClient {
-	return &messengerClient{cc}
+func NewProgramClient(cc grpc.ClientConnInterface) ProgramClient {
+	return &programClient{cc}
 }
 
-func (c *messengerClient) SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*SendValueReply, error) {
-	out := new(SendValueReply)
-	err := c.cc.Invoke(ctx, "/grpc.Messenger/SendValue", in, out, opts...)
+func (c *programClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Program/Run", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *messengerClient) GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*GetValueReply, error) {
-	out := new(GetValueReply)
-	err := c.cc.Invoke(ctx, "/grpc.Messenger/GetValue", in, out, opts...)
+func (c *programClient) Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Program/Pause", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// MessengerServer is the server API for Messenger service.
-// All implementations must embed UnimplementedMessengerServer
+func (c *programClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Program/Reset", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *programClient) Load(ctx context.Context, in *LoadRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Program/Load", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *programClient) SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Program/SendValue", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ProgramServer is the server API for Program service.
+// All implementations must embed UnimplementedProgramServer
 // for forward compatibility
-type MessengerServer interface {
-	SendValue(context.Context, *SendValueRequest) (*SendValueReply, error)
-	GetValue(context.Context, *GetValueRequest) (*GetValueReply, error)
-	mustEmbedUnimplementedMessengerServer()
+type ProgramServer interface {
+	Run(context.Context, *RunRequest) (*CommandReply, error)
+	Pause(context.Context, *PauseRequest) (*CommandReply, error)
+	Reset(context.Context, *ResetRequest) (*CommandReply, error)
+	Load(context.Context, *LoadRequest) (*CommandReply, error)
+	SendValue(context.Context, *SendValueRequest) (*CommandReply, error)
+	mustEmbedUnimplementedProgramServer()
 }
 
-// UnimplementedMessengerServer must be embedded to have forward compatible implementations.
-type UnimplementedMessengerServer struct {
+// UnimplementedProgramServer must be embedded to have forward compatible implementations.
+type UnimplementedProgramServer struct {
 }
 
-func (UnimplementedMessengerServer) SendValue(context.Context, *SendValueRequest) (*SendValueReply, error) {
+func (UnimplementedProgramServer) Run(context.Context, *RunRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
+}
+func (UnimplementedProgramServer) Pause(context.Context, *PauseRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Pause not implemented")
+}
+func (UnimplementedProgramServer) Reset(context.Context, *ResetRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
+}
+func (UnimplementedProgramServer) Load(context.Context, *LoadRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Load not implemented")
+}
+func (UnimplementedProgramServer) SendValue(context.Context, *SendValueRequest) (*CommandReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendValue not implemented")
 }
-func (UnimplementedMessengerServer) GetValue(context.Context, *GetValueRequest) (*GetValueReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetValue not implemented")
-}
-func (UnimplementedMessengerServer) mustEmbedUnimplementedMessengerServer() {}
+func (UnimplementedProgramServer) mustEmbedUnimplementedProgramServer() {}
 
-// UnsafeMessengerServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to MessengerServer will
+// UnsafeProgramServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ProgramServer will
 // result in compilation errors.
-type UnsafeMessengerServer interface {
-	mustEmbedUnimplementedMessengerServer()
+type UnsafeProgramServer interface {
+	mustEmbedUnimplementedProgramServer()
 }
 
-func RegisterMessengerServer(s grpc.ServiceRegistrar, srv MessengerServer) {
-	s.RegisterService(&_Messenger_serviceDesc, srv)
+func RegisterProgramServer(s grpc.ServiceRegistrar, srv ProgramServer) {
+	s.RegisterService(&_Program_serviceDesc, srv)
 }
 
-func _Messenger_SendValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Program_Run_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProgramServer).Run(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Program/Run",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProgramServer).Run(ctx, req.(*RunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Program_Pause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProgramServer).Pause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Program/Pause",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProgramServer).Pause(ctx, req.(*PauseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Program_Reset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProgramServer).Reset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Program/Reset",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProgramServer).Reset(ctx, req.(*ResetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Program_Load_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProgramServer).Load(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Program/Load",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProgramServer).Load(ctx, req.(*LoadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Program_SendValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendValueRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MessengerServer).SendValue(ctx, in)
+		return srv.(ProgramServer).SendValue(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.Messenger/SendValue",
+		FullMethod: "/grpc.Program/SendValue",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MessengerServer).SendValue(ctx, req.(*SendValueRequest))
+		return srv.(ProgramServer).SendValue(ctx, req.(*SendValueRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Messenger_GetValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+var _Program_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.Program",
+	HandlerType: (*ProgramServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Run",
+			Handler:    _Program_Run_Handler,
+		},
+		{
+			MethodName: "Pause",
+			Handler:    _Program_Pause_Handler,
+		},
+		{
+			MethodName: "Reset",
+			Handler:    _Program_Reset_Handler,
+		},
+		{
+			MethodName: "Load",
+			Handler:    _Program_Load_Handler,
+		},
+		{
+			MethodName: "SendValue",
+			Handler:    _Program_SendValue_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "internal/grpc/messenger.proto",
+}
+
+// StackClient is the client API for Stack service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type StackClient interface {
+	GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
+}
+
+type stackClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewStackClient(cc grpc.ClientConnInterface) StackClient {
+	return &stackClient{cc}
+}
+
+func (c *stackClient) GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
+	out := new(ValueReply)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/GetValue", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// StackServer is the server API for Stack service.
+// All implementations must embed UnimplementedStackServer
+// for forward compatibility
+type StackServer interface {
+	GetValue(context.Context, *GetValueRequest) (*ValueReply, error)
+	mustEmbedUnimplementedStackServer()
+}
+
+// UnimplementedStackServer must be embedded to have forward compatible implementations.
+type UnimplementedStackServer struct {
+}
+
+func (UnimplementedStackServer) GetValue(context.Context, *GetValueRequest) (*ValueReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetValue not implemented")
+}
+func (UnimplementedStackServer) mustEmbedUnimplementedStackServer() {}
+
+// UnsafeStackServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to StackServer will
+// result in compilation errors.
+type UnsafeStackServer interface {
+	mustEmbedUnimplementedStackServer()
+}
+
+func RegisterStackServer(s grpc.ServiceRegistrar, srv StackServer) {
+	s.RegisterService(&_Stack_serviceDesc, srv)
+}
+
+func _Stack_GetValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetValueRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MessengerServer).GetValue(ctx, in)
+		return srv.(StackServer).GetValue(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.Messenger/GetValue",
+		FullMethod: "/grpc.Stack/GetValue",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MessengerServer).GetValue(ctx, req.(*GetValueRequest))
+		return srv.(StackServer).GetValue(ctx, req.(*GetValueRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Messenger_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.Messenger",
-	HandlerType: (*MessengerServer)(nil),
+var _Stack_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.Stack",
+	HandlerType: (*StackServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "SendValue",
-			Handler:    _Messenger_SendValue_Handler,
-		},
-		{
 			MethodName: "GetValue",
-			Handler:    _Messenger_GetValue_Handler,
+			Handler:    _Stack_GetValue_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

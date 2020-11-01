@@ -12,11 +12,12 @@ import (
 func main() {
 
 	nodeType := os.Getenv("NODE_TYPE")
+	nodeType = "program"
 
 	switch nodeType {
 	case "program":
 		p := nodes.NewProgramNode(os.Getenv("MASTER_URI"))
-		err := p.Load(os.Getenv("PROGRAM"))
+		err := p.LoadProgram(os.Getenv("PROGRAM"))
 		if err != nil {
 			log.Printf("Could not load default program: %s", err.Error())
 		}

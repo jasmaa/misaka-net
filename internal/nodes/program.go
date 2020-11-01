@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -13,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/tis"
 	"github.com/jasmaa/misaka-net/internal/utils"
+	"google.golang.org/grpc"
 )
 
 // Register buffer size
@@ -38,6 +41,8 @@ type ProgramNode struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	isRunning bool
+
+	pb.UnimplementedProgramServer
 }
 
 // NewProgramNode creates a new program node
@@ -76,150 +81,54 @@ func (p *ProgramNode) Start() {
 	// TODO: authenticate commands from master with key
 	// TODO: switch to faster protocol (grpc?)
 
-	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if !p.isRunning {
-				p.Run()
-				log.Printf("Node was run")
-			} else {
-				log.Printf("Node is already running")
-			}
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if p.isRunning {
-				p.Pause()
-				log.Printf("Node was paused")
-			} else {
-				log.Printf("Node is already paused")
-			}
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			p.Reset()
-			log.Printf("Node was paused and reset")
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/load", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			program := r.FormValue("program")
-			err := p.Load(program)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Error loading program: %s", err.Error()), http.StatusBadRequest)
-				return
-			}
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Program was loaded")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			rx := r.FormValue("register")
-			v, err := strconv.Atoi(r.FormValue("value"))
-			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
-				return
-			}
-
-			switch rx {
-			case "R0":
-				p.r0 <- v
-			case "R1":
-				p.r1 <- v
-			case "R2":
-				p.r2 <- v
-			case "R3":
-				p.r3 <- v
-			default:
-				http.Error(w, "Not a valid register", http.StatusBadRequest)
-				return
-			}
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Received value")
-
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	log.Printf("Starting server...")
-	if err := http.ListenAndServe(":8000", nil); err != nil {
-		log.Fatal(err)
+	lis, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterProgramServer(s, p)
+	log.Printf("starting server...")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
 
 // Run starts asm execution
-func (p *ProgramNode) Run() {
-	p.isRunning = true
-
-	ctx, cancel := context.WithCancel(context.Background())
-	p.ctx = ctx
-	p.cancel = cancel
+func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
+	if !p.isRunning {
+		p.isRunning = true
+		ctx, cancel := context.WithCancel(context.Background())
+		p.ctx = ctx
+		p.cancel = cancel
+		log.Printf("node was run")
+	} else {
+		log.Printf("node is already running")
+	}
+	return &pb.CommandReply{Success: true}, nil
 }
 
 // Pause pauses asm execution
-func (p *ProgramNode) Pause() {
-	p.cancel()
-	p.isRunning = false
+func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
+	if p.isRunning {
+		p.cancel()
+		p.isRunning = false
+		log.Printf("node was paused")
+	} else {
+		log.Printf("node is already paused")
+	}
+	return &pb.CommandReply{Success: true}, nil
 }
 
 // Reset resets asm execution and registers
-func (p *ProgramNode) Reset() {
-	// Stop program execution
-	p.cancel()
-	p.isRunning = false
-
-	p.acc = 0
-	p.bak = 0
-	p.ptr = 0
-
-	p.r0 = make(chan int, bufferSize)
-	p.r1 = make(chan int, bufferSize)
-	p.r2 = make(chan int, bufferSize)
-	p.r3 = make(chan int, bufferSize)
+func (p *ProgramNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
+	p.resetNode()
+	log.Printf("node was reset")
+	return &pb.CommandReply{Success: true}, nil
 }
 
-// Load resets node and loads asm program
-func (p *ProgramNode) Load(s string) error {
-	// Reset node
-	p.Reset()
-
+// LoadProgram loads program onto node
+func (p *ProgramNode) LoadProgram(s string) error {
 	instrArr := strings.Split(s, "\n")
-
 	labelMap, err := tis.GenerateLabelMap(instrArr)
 	if err != nil {
 		return err
@@ -233,6 +142,50 @@ func (p *ProgramNode) Load(s string) error {
 	p.asm = asm
 	p.labelMap = labelMap
 	return nil
+}
+
+// Load resets node and loads asm program
+func (p *ProgramNode) Load(ctx context.Context, in *pb.LoadRequest) (*pb.CommandReply, error) {
+	p.resetNode()
+	err := p.LoadProgram(in.Program)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CommandReply{Success: true}, nil
+}
+
+// SendValue sends value to
+func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*pb.CommandReply, error) {
+	switch in.Register {
+	case 0:
+		p.r0 <- int(in.Value)
+	case 1:
+		p.r1 <- int(in.Value)
+	case 2:
+		p.r2 <- int(in.Value)
+	case 3:
+		p.r3 <- int(in.Value)
+	default:
+		return nil, fmt.Errorf("not a valid register")
+	}
+	log.Printf("received value")
+	return &pb.CommandReply{Success: true}, nil
+}
+
+// resetNode resets program node
+func (p *ProgramNode) resetNode() {
+	// Stop program execution
+	p.cancel()
+	p.isRunning = false
+
+	p.acc = 0
+	p.bak = 0
+	p.ptr = 0
+
+	p.r0 = make(chan int, bufferSize)
+	p.r1 = make(chan int, bufferSize)
+	p.r2 = make(chan int, bufferSize)
+	p.r3 = make(chan int, bufferSize)
 }
 
 // Update steps through asm
