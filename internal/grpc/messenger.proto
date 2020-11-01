@@ -18,6 +18,8 @@ service Program {
 }
 
 service Stack {
+  rpc Run(RunRequest) returns (CommandReply) {}
+  rpc Reset(ResetRequest) returns (CommandReply) {}
   rpc Push(PushValueRequest) returns (CommandReply) {}
   rpc Pop(PopValueRequest) returns (ValueReply) {}
 }

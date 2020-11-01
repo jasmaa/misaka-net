@@ -2,14 +2,14 @@ package nodes
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"strconv"
+	"net"
 	"time"
 
+	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/utils"
+	"google.golang.org/grpc"
 )
 
 // StackNode is a stack node
@@ -18,6 +18,8 @@ type StackNode struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	pb.UnimplementedStackServer
 }
 
 // popResponse structures response to pop request
@@ -37,97 +39,46 @@ func NewStackNode() *StackNode {
 
 // Start starts stack node
 func (s *StackNode) Start() {
-
-	http.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			s.Run()
-			log.Printf("Node was run")
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			log.Printf("Node was paused")
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			s.Reset()
-			log.Printf("Node was paused and reset")
-			fmt.Fprintf(w, "Success")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/push", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
-				return
-			}
-
-			v, err := strconv.Atoi(r.FormValue("value"))
-			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
-				return
-			}
-
-			s.stack.Push(v)
-
-			fmt.Fprintf(w, "Success")
-			log.Printf("Value was pushed")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	http.HandleFunc("/pop", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			v, err := s.waitPop()
-			if err != nil {
-				log.Print(err)
-				http.Error(w, "Cannot pop value", http.StatusBadRequest)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(popResponse{Value: v})
-			log.Printf("Value was popped")
-		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	log.Printf("Starting server...")
-	if err := http.ListenAndServe(":8000", nil); err != nil {
-		log.Fatal(err)
+	lis, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	server := grpc.NewServer()
+	pb.RegisterStackServer(server, s)
+	log.Printf("starting server...")
+	if err := server.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
 
 // Run runs stack node
-func (s *StackNode) Run() {
+func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
 	s.cancel = cancel
+	return &pb.CommandReply{}, nil
 }
 
 // Reset resets stack node
-func (s *StackNode) Reset() {
+func (s *StackNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
 	s.cancel()
 	s.stack.Clear()
+	return &pb.CommandReply{}, nil
+}
+
+// Push pushes value onto stack node
+func (s *StackNode) Push(ctx context.Context, in *pb.PushValueRequest) (*pb.CommandReply, error) {
+	s.stack.Push(int(in.Value))
+	return &pb.CommandReply{}, nil
+}
+
+// Pop pops value from stack node
+func (s *StackNode) Pop(ctx context.Context, in *pb.PopValueRequest) (*pb.ValueReply, error) {
+	v, err := s.waitPop()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ValueReply{Value: int32(v)}, nil
 }
 
 // waitPop waits until value can be popped from stack and returns value

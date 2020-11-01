@@ -81,10 +81,10 @@ func (p *ProgramNode) Start() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
-	pb.RegisterProgramServer(s, p)
+	server := grpc.NewServer()
+	pb.RegisterProgramServer(server, p)
 	log.Printf("starting server...")
-	if err := s.Serve(lis); err != nil {
+	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }

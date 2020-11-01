@@ -363,6 +363,8 @@ var _Program_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StackClient interface {
+	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error)
 	Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
 	Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
 }
@@ -373,6 +375,24 @@ type stackClient struct {
 
 func NewStackClient(cc grpc.ClientConnInterface) StackClient {
 	return &stackClient{cc}
+}
+
+func (c *stackClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/Run", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stackClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error) {
+	out := new(CommandReply)
+	err := c.cc.Invoke(ctx, "/grpc.Stack/Reset", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *stackClient) Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
@@ -397,6 +417,8 @@ func (c *stackClient) Pop(ctx context.Context, in *PopValueRequest, opts ...grpc
 // All implementations must embed UnimplementedStackServer
 // for forward compatibility
 type StackServer interface {
+	Run(context.Context, *RunRequest) (*CommandReply, error)
+	Reset(context.Context, *ResetRequest) (*CommandReply, error)
 	Push(context.Context, *PushValueRequest) (*CommandReply, error)
 	Pop(context.Context, *PopValueRequest) (*ValueReply, error)
 	mustEmbedUnimplementedStackServer()
@@ -406,6 +428,12 @@ type StackServer interface {
 type UnimplementedStackServer struct {
 }
 
+func (UnimplementedStackServer) Run(context.Context, *RunRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
+}
+func (UnimplementedStackServer) Reset(context.Context, *ResetRequest) (*CommandReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
+}
 func (UnimplementedStackServer) Push(context.Context, *PushValueRequest) (*CommandReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Push not implemented")
 }
@@ -423,6 +451,42 @@ type UnsafeStackServer interface {
 
 func RegisterStackServer(s grpc.ServiceRegistrar, srv StackServer) {
 	s.RegisterService(&_Stack_serviceDesc, srv)
+}
+
+func _Stack_Run_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StackServer).Run(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Stack/Run",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StackServer).Run(ctx, req.(*RunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Stack_Reset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StackServer).Reset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpc.Stack/Reset",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StackServer).Reset(ctx, req.(*ResetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Stack_Push_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -465,6 +529,14 @@ var _Stack_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.Stack",
 	HandlerType: (*StackServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Run",
+			Handler:    _Stack_Run_Handler,
+		},
+		{
+			MethodName: "Reset",
+			Handler:    _Stack_Reset_Handler,
+		},
 		{
 			MethodName: "Push",
 			Handler:    _Stack_Push_Handler,
