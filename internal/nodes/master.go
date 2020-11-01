@@ -75,20 +75,17 @@ func (m *MasterNode) Start() {
 		switch r.Method {
 		case "POST":
 			m.isRunning = true
-			nodeCtx, cancel := context.WithCancel(context.Background())
-			m.ctx = nodeCtx
-			m.cancel = cancel
 
 			err := m.broadcastCommand("run")
 			if err != nil {
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error running network: %s", err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error running network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
 
 			fmt.Fprintf(w, "Success")
 		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -98,17 +95,15 @@ func (m *MasterNode) Start() {
 			err := m.broadcastCommand("pause")
 			if err != nil {
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error pausing network: %s", err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error pausing network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-
-			if !m.isRunning {
+			if m.isRunning {
 				m.stopNode()
 			}
-
 			fmt.Fprintf(w, "Success")
 		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -118,16 +113,16 @@ func (m *MasterNode) Start() {
 			err := m.broadcastCommand("reset")
 			if err != nil {
 				log.Print(err)
-				http.Error(w, fmt.Sprintf("Error resetting network: %s", err.Error()), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
-			if !m.isRunning {
+			if m.isRunning {
 				m.stopNode()
 			}
 			m.resetNode()
 			fmt.Fprintf(w, "Success")
 		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -136,7 +131,7 @@ func (m *MasterNode) Start() {
 		case "POST":
 
 			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				http.Error(w, "cannot parse form", http.StatusBadRequest)
 				return
 			}
 
@@ -158,6 +153,9 @@ func (m *MasterNode) Start() {
 				http.Error(w, fmt.Sprintf("error resetting network: %s", err.Error()), http.StatusBadRequest)
 				return
 			}
+			if m.isRunning {
+				m.stopNode()
+			}
 			m.resetNode()
 
 			// Send load command to target node
@@ -176,7 +174,7 @@ func (m *MasterNode) Start() {
 			log.Printf("successfully loaded program")
 			fmt.Fprintf(w, "Success")
 		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -184,18 +182,18 @@ func (m *MasterNode) Start() {
 		switch r.Method {
 		case "POST":
 			if !m.isRunning {
-				http.Error(w, "Network is not running", http.StatusBadRequest)
+				http.Error(w, "network is not running", http.StatusBadRequest)
 				return
 			}
 
 			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Cannot parse form", http.StatusBadRequest)
+				http.Error(w, "cannot parse form", http.StatusBadRequest)
 				return
 			}
 
 			v, err := strconv.Atoi(r.FormValue("value"))
 			if err != nil {
-				http.Error(w, "Cannot parse value", http.StatusBadRequest)
+				http.Error(w, "cannot parse value", http.StatusBadRequest)
 				return
 			}
 
@@ -205,7 +203,7 @@ func (m *MasterNode) Start() {
 			json.NewEncoder(w).Encode(clientOutResponse{Value: <-m.outChan})
 			log.Printf("Value outputted")
 		default:
-			http.Error(w, "Method GET not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method GET not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -238,6 +236,11 @@ func (m *MasterNode) SendOutput(ctx context.Context, in *pb.OutputValueRequest) 
 func (m *MasterNode) stopNode() {
 	m.cancel()
 	m.isRunning = false
+
+	// Re-create context
+	nodeCtx, cancel := context.WithCancel(context.Background())
+	m.ctx = nodeCtx
+	m.cancel = cancel
 }
 
 // resetNode resets master node

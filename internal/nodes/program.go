@@ -92,9 +92,6 @@ func (p *ProgramNode) Start() {
 func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	if !p.isRunning {
 		p.isRunning = true
-		nodeCtx, cancel := context.WithCancel(context.Background())
-		p.ctx = nodeCtx
-		p.cancel = cancel
 		log.Printf("node was run")
 	} else {
 		log.Printf("node is already running")
@@ -173,6 +170,11 @@ func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*
 func (p *ProgramNode) stopNode() {
 	p.cancel()
 	p.isRunning = false
+
+	// Re-create context
+	nodeCtx, cancel := context.WithCancel(context.Background())
+	p.ctx = nodeCtx
+	p.cancel = cancel
 }
 
 // resetNode resets program node

@@ -51,9 +51,6 @@ func (s *StackNode) Start() {
 func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	if !s.isRunning {
 		s.isRunning = true
-		nodeCtx, cancel := context.WithCancel(context.Background())
-		s.ctx = nodeCtx
-		s.cancel = cancel
 		log.Printf("node was run")
 	} else {
 		log.Printf("node is already running")
@@ -101,6 +98,11 @@ func (s *StackNode) Pop(ctx context.Context, in *pb.PopValueRequest) (*pb.ValueR
 func (s *StackNode) stopNode() {
 	s.cancel()
 	s.isRunning = false
+
+	// Re-create node context
+	nodeCtx, cancel := context.WithCancel(context.Background())
+	s.ctx = nodeCtx
+	s.cancel = cancel
 }
 
 // resetNode resets stack node
