@@ -20,16 +20,19 @@ type StackNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	token string
+
 	pb.UnimplementedStackServer
 }
 
 // NewStackNode creates a new stack node
-func NewStackNode() *StackNode {
+func NewStackNode(token string) *StackNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &StackNode{
 		stack:  utils.NewIntStack(),
 		ctx:    ctx,
 		cancel: cancel,
+		token:  token,
 	}
 }
 
@@ -45,6 +48,18 @@ func (s *StackNode) Start() {
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+// GetRequestMetadata gets metadata with token set for request
+func (s *StackNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": fmt.Sprintf("Bearer %s", s.token),
+	}, nil
+}
+
+// RequireTransportSecurity indicates credentials are required
+func (s *StackNode) RequireTransportSecurity() bool {
+	return true
 }
 
 // Run runs stack node

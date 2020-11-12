@@ -33,6 +33,8 @@ type MasterNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	token string
+
 	pb.UnimplementedMasterServer
 }
 
@@ -42,7 +44,7 @@ type clientOutResponse struct {
 }
 
 // NewMasterNode creates a new master node
-func NewMasterNode(nodeInfo map[string]NodeInfo) *MasterNode {
+func NewMasterNode(nodeInfo map[string]NodeInfo, token string) *MasterNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MasterNode{
 		nodeInfo: nodeInfo,
@@ -50,6 +52,7 @@ func NewMasterNode(nodeInfo map[string]NodeInfo) *MasterNode {
 		outChan:  make(chan int, bufferSize),
 		ctx:      ctx,
 		cancel:   cancel,
+		token:    token,
 	}
 }
 
@@ -211,6 +214,18 @@ func (m *MasterNode) Start() {
 	if err := http.ListenAndServe(clientPort, nil); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// GetRequestMetadata gets metadata with token set for request
+func (m *MasterNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": fmt.Sprintf("Bearer %s", m.token),
+	}, nil
+}
+
+// RequireTransportSecurity indicates credentials are required
+func (m *MasterNode) RequireTransportSecurity() bool {
+	return true
 }
 
 // GetInput gets input from master node

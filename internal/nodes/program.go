@@ -38,11 +38,13 @@ type ProgramNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	token string
+
 	pb.UnimplementedProgramServer
 }
 
 // NewProgramNode creates a new program node
-func NewProgramNode(masterURI string) *ProgramNode {
+func NewProgramNode(masterURI string, token string) *ProgramNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ProgramNode{
 		masterURI: masterURI,
@@ -55,6 +57,7 @@ func NewProgramNode(masterURI string) *ProgramNode {
 		asm:       [][]string{[]string{"NOP"}},
 		ctx:       ctx,
 		cancel:    cancel,
+		token:     token,
 	}
 }
 
@@ -86,6 +89,18 @@ func (p *ProgramNode) Start() {
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+// GetRequestMetadata gets metadata with token set for request
+func (p *ProgramNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": fmt.Sprintf("Bearer %s", p.token),
+	}, nil
+}
+
+// RequireTransportSecurity indicates credentials are required
+func (p *ProgramNode) RequireTransportSecurity() bool {
+	return true
 }
 
 // Run starts asm execution
