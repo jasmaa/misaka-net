@@ -19,7 +19,8 @@ services:
           "misaka2": {"type": "program"},
           "misaka3": {"type": "stack"}
         }
-      TOKEN: ZXC741ASD852QWE963
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
 
   misaka1:
@@ -37,7 +38,8 @@ services:
         MOV ACC, misaka2:R0
         MOV R0, ACC
         OUT ACC
-      TOKEN: ZXC741ASD852QWE963
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
     
   misaka2:
@@ -55,7 +57,8 @@ services:
         PUSH ACC, misaka3
         POP misaka3, ACC
         MOV ACC, misaka1:R0
-      TOKEN: ZXC741ASD852QWE963
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
     
   misaka3:
@@ -66,7 +69,8 @@ services:
       - default
     environment: 
       NODE_TYPE: stack
-      TOKEN: ZXC741ASD852QWE963
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
 
 networks:

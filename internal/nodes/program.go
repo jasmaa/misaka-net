@@ -14,6 +14,7 @@ import (
 	"github.com/jasmaa/misaka-net/internal/tis"
 	"github.com/jasmaa/misaka-net/internal/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Register buffer size
@@ -38,15 +39,19 @@ type ProgramNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
-	token    string
-	dialOpts []grpc.DialOption
+	certFile, keyFile string
+	dialOpts          []grpc.DialOption
 
 	pb.UnimplementedProgramServer
 }
 
 // NewProgramNode creates a new program node
-func NewProgramNode(masterURI string, token string) *ProgramNode {
+func NewProgramNode(masterURI string, certFile, keyFile string) *ProgramNode {
 	ctx, cancel := context.WithCancel(context.Background())
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err)
+	}
 	return &ProgramNode{
 		masterURI: masterURI,
 		acc:       0,
@@ -58,10 +63,10 @@ func NewProgramNode(masterURI string, token string) *ProgramNode {
 		asm:       [][]string{[]string{"NOP"}},
 		ctx:       ctx,
 		cancel:    cancel,
-		token:     token,
+		certFile:  certFile,
+		keyFile:   keyFile,
 		dialOpts: []grpc.DialOption{
-			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
-			grpc.WithInsecure(),
+			grpc.WithTransportCredentials(creds),
 			grpc.WithBlock(),
 		},
 	}
@@ -89,7 +94,11 @@ func (p *ProgramNode) Start() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server := grpc.NewServer()
+	creds, err := credentials.NewServerTLSFromFile(p.certFile, p.keyFile)
+	if err != nil {
+		log.Fatalf("failed to get creds: %v", err)
+	}
+	server := grpc.NewServer(grpc.Creds(creds))
 	pb.RegisterProgramServer(server, p)
 	log.Printf("starting grpc server...")
 	if err := server.Serve(lis); err != nil {

@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -33,8 +34,8 @@ type MasterNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
-	token    string
-	dialOpts []grpc.DialOption
+	certFile, keyFile string
+	dialOpts          []grpc.DialOption
 
 	pb.UnimplementedMasterServer
 }
@@ -44,36 +45,23 @@ type clientOutResponse struct {
 	Value int `json:"value"`
 }
 
-type tokenAuth struct {
-	token string
-}
-
-// GetRequestMetadata gets metadata with token set for request
-func (t tokenAuth) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": fmt.Sprintf("Bearer %s", t.token),
-	}, nil
-}
-
-// RequireTransportSecurity indicates credentials are required
-func (tokenAuth) RequireTransportSecurity() bool {
-	// TODO: insecure, set to true when adding ssl
-	return false
-}
-
 // NewMasterNode creates a new master node
-func NewMasterNode(nodeInfo map[string]NodeInfo, token string) *MasterNode {
+func NewMasterNode(nodeInfo map[string]NodeInfo, certFile, keyFile string) *MasterNode {
 	ctx, cancel := context.WithCancel(context.Background())
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err)
+	}
 	return &MasterNode{
 		nodeInfo: nodeInfo,
 		inChan:   make(chan int, bufferSize),
 		outChan:  make(chan int, bufferSize),
 		ctx:      ctx,
 		cancel:   cancel,
-		token:    token,
+		certFile: certFile,
+		keyFile:  keyFile,
 		dialOpts: []grpc.DialOption{
-			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
-			grpc.WithInsecure(),
+			grpc.WithTransportCredentials(creds),
 			grpc.WithBlock(),
 		},
 	}
@@ -89,7 +77,11 @@ func (m *MasterNode) Start() {
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
-		server := grpc.NewServer()
+		creds, err := credentials.NewServerTLSFromFile(m.certFile, m.keyFile)
+		if err != nil {
+			log.Fatalf("failed to get creds: %v", err)
+		}
+		server := grpc.NewServer(grpc.Creds(creds))
 		pb.RegisterMasterServer(server, m)
 		log.Printf("starting grpc server...")
 		if err := server.Serve(lis); err != nil {

@@ -12,18 +12,19 @@ import (
 func main() {
 
 	nodeType := os.Getenv("NODE_TYPE")
-	token := os.Getenv("TOKEN")
+	certFile := os.Getenv("CERT_FILE")
+	keyFile := os.Getenv("KEY_FILE")
 
 	switch nodeType {
 	case "program":
-		p := nodes.NewProgramNode(os.Getenv("MASTER_URI"), token)
+		p := nodes.NewProgramNode(os.Getenv("MASTER_URI"), certFile, keyFile)
 		err := p.LoadProgram(os.Getenv("PROGRAM"))
 		if err != nil {
 			log.Printf("Could not load default program: %s", err.Error())
 		}
 		p.Start()
 	case "stack":
-		s := nodes.NewStackNode(token)
+		s := nodes.NewStackNode(certFile, keyFile)
 		s.Start()
 	case "master":
 		var nodeInfo map[string]nodes.NodeInfo
@@ -31,7 +32,7 @@ func main() {
 		if err != nil {
 			panic(fmt.Errorf("invalid node info"))
 		}
-		m := nodes.NewMasterNode(nodeInfo, token)
+		m := nodes.NewMasterNode(nodeInfo, certFile, keyFile)
 		m.Start()
 	default:
 		panic(fmt.Errorf("'%s' not a valid node type", nodeType))
