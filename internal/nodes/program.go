@@ -14,6 +14,7 @@ import (
 	"github.com/jasmaa/misaka-net/internal/tis"
 	"github.com/jasmaa/misaka-net/internal/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Register buffer size
@@ -38,12 +39,19 @@ type ProgramNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	certFile, keyFile string
+	dialOpts          []grpc.DialOption
+
 	pb.UnimplementedProgramServer
 }
 
 // NewProgramNode creates a new program node
-func NewProgramNode(masterURI string) *ProgramNode {
+func NewProgramNode(masterURI string, certFile, keyFile string) *ProgramNode {
 	ctx, cancel := context.WithCancel(context.Background())
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err)
+	}
 	return &ProgramNode{
 		masterURI: masterURI,
 		acc:       0,
@@ -55,6 +63,12 @@ func NewProgramNode(masterURI string) *ProgramNode {
 		asm:       [][]string{[]string{"NOP"}},
 		ctx:       ctx,
 		cancel:    cancel,
+		certFile:  certFile,
+		keyFile:   keyFile,
+		dialOpts: []grpc.DialOption{
+			grpc.WithTransportCredentials(creds),
+			grpc.WithBlock(),
+		},
 	}
 }
 
@@ -74,13 +88,15 @@ func (p *ProgramNode) Start() {
 		}
 	}()
 
-	// TODO: authenticate commands from master with key
-
 	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server := grpc.NewServer()
+	creds, err := credentials.NewServerTLSFromFile(p.certFile, p.keyFile)
+	if err != nil {
+		log.Fatalf("failed to get creds: %v", err)
+	}
+	server := grpc.NewServer(grpc.Creds(creds))
 	pb.RegisterProgramServer(server, p)
 	log.Printf("starting grpc server...")
 	if err := server.Serve(lis); err != nil {
@@ -463,7 +479,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 			register = 3
 		}
 
-		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), p.dialOpts...)
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
@@ -481,7 +497,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 
 // pushValue pushes value to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -496,7 +512,7 @@ func (p *ProgramNode) pushValue(v int, targetURI string) error {
 
 // popValue pops value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -511,7 +527,7 @@ func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 
 // inputValue gets an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -526,7 +542,7 @@ func (p *ProgramNode) inputValue() (int, error) {
 
 // outputValue outputs value to master node
 func (p *ProgramNode) outputValue(v int) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

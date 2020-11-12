@@ -19,6 +19,8 @@ services:
           "misaka2": {"type": "program"},
           "misaka3": {"type": "stack"}
         }
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
 
   misaka1:
@@ -36,6 +38,8 @@ services:
         MOV ACC, misaka2:R0
         MOV R0, ACC
         OUT ACC
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
     
   misaka2:
@@ -53,6 +57,8 @@ services:
         PUSH ACC, misaka3
         POP misaka3, ACC
         MOV ACC, misaka1:R0
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
     
   misaka3:
@@ -63,6 +69,8 @@ services:
       - default
     environment: 
       NODE_TYPE: stack
+      CERT_FILE: ./openssl/service.pem
+      KEY_FILE: ./openssl/service.key
     command: ./app
 
 networks:

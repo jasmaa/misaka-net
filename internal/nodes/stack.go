@@ -10,6 +10,7 @@ import (
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // StackNode is a stack node
@@ -20,16 +21,20 @@ type StackNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	certFile, keyFile string
+
 	pb.UnimplementedStackServer
 }
 
 // NewStackNode creates a new stack node
-func NewStackNode() *StackNode {
+func NewStackNode(certFile, keyFile string) *StackNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &StackNode{
-		stack:  utils.NewIntStack(),
-		ctx:    ctx,
-		cancel: cancel,
+		stack:    utils.NewIntStack(),
+		ctx:      ctx,
+		cancel:   cancel,
+		certFile: certFile,
+		keyFile:  keyFile,
 	}
 }
 
@@ -39,7 +44,11 @@ func (s *StackNode) Start() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server := grpc.NewServer()
+	creds, err := credentials.NewServerTLSFromFile(s.certFile, s.keyFile)
+	if err != nil {
+		log.Fatalf("failed to get creds: %v", err)
+	}
+	server := grpc.NewServer(grpc.Creds(creds))
 	pb.RegisterStackServer(server, s)
 	log.Printf("starting grpc server...")
 	if err := server.Serve(lis); err != nil {

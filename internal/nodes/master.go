@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -33,6 +34,9 @@ type MasterNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	certFile, keyFile string
+	dialOpts          []grpc.DialOption
+
 	pb.UnimplementedMasterServer
 }
 
@@ -42,28 +46,39 @@ type clientOutResponse struct {
 }
 
 // NewMasterNode creates a new master node
-func NewMasterNode(nodeInfo map[string]NodeInfo) *MasterNode {
+func NewMasterNode(nodeInfo map[string]NodeInfo, certFile, keyFile string) *MasterNode {
 	ctx, cancel := context.WithCancel(context.Background())
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err)
+	}
 	return &MasterNode{
 		nodeInfo: nodeInfo,
 		inChan:   make(chan int, bufferSize),
 		outChan:  make(chan int, bufferSize),
 		ctx:      ctx,
 		cancel:   cancel,
+		certFile: certFile,
+		keyFile:  keyFile,
+		dialOpts: []grpc.DialOption{
+			grpc.WithTransportCredentials(creds),
+			grpc.WithBlock(),
+		},
 	}
 }
 
 // Start starts master node server
 func (m *MasterNode) Start() {
-
-	// TODO: authenticate commands from master with key
-
 	go func() {
 		lis, err := net.Listen("tcp", grpcPort)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
-		server := grpc.NewServer()
+		creds, err := credentials.NewServerTLSFromFile(m.certFile, m.keyFile)
+		if err != nil {
+			log.Fatalf("failed to get creds: %v", err)
+		}
+		server := grpc.NewServer(grpc.Creds(creds))
 		pb.RegisterMasterServer(server, m)
 		log.Printf("starting grpc server...")
 		if err := server.Serve(lis); err != nil {
@@ -159,7 +174,7 @@ func (m *MasterNode) Start() {
 			m.resetNode()
 
 			// Send load command to target node
-			conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+			conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), m.dialOpts...)
 			if err != nil {
 				log.Fatalf("did not connect: %v", err)
 			}
@@ -280,7 +295,7 @@ func (m *MasterNode) broadcastCommand(cmd string) error {
 
 // broadcastCommandProgram broadcasts command to program nodes
 func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), m.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -308,7 +323,7 @@ func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error
 
 // broadcastCommandStack broadcasts command to stack nodes
 func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), m.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
