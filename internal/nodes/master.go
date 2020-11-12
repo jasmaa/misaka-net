@@ -69,9 +69,6 @@ func NewMasterNode(nodeInfo map[string]NodeInfo, certFile, keyFile string) *Mast
 
 // Start starts master node server
 func (m *MasterNode) Start() {
-
-	// TODO: authenticate commands from master with key
-
 	go func() {
 		lis, err := net.Listen("tcp", grpcPort)
 		if err != nil {

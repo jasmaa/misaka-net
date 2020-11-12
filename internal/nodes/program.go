@@ -88,8 +88,6 @@ func (p *ProgramNode) Start() {
 		}
 	}()
 
-	// TODO: authenticate commands from master with key
-
 	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)

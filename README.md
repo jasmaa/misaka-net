@@ -17,9 +17,13 @@ which broadcasts commands to all nodes and manages IO from the client.
 
 ## Setup
 
-Follow [gRPC setup instructions](https://grpc.io/docs/languages/go/quickstart/) re-generate gRPC Go code with:
+Follow [gRPC setup instructions](https://grpc.io/docs/languages/go/quickstart/) to re-generate gRPC Go code with:
 
     make grpc
+
+Make sure OpenSSL is installed and generate certificate and private key with:
+
+    make cert
 
 ### Deploy single node
 
