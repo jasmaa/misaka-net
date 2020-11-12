@@ -33,7 +33,8 @@ type MasterNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
-	token string
+	token    string
+	dialOpts []grpc.DialOption
 
 	pb.UnimplementedMasterServer
 }
@@ -41,6 +42,23 @@ type MasterNode struct {
 // clientOutResponse structures response to client output request
 type clientOutResponse struct {
 	Value int `json:"value"`
+}
+
+type tokenAuth struct {
+	token string
+}
+
+// GetRequestMetadata gets metadata with token set for request
+func (t tokenAuth) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	return map[string]string{
+		"authorization": fmt.Sprintf("Bearer %s", t.token),
+	}, nil
+}
+
+// RequireTransportSecurity indicates credentials are required
+func (tokenAuth) RequireTransportSecurity() bool {
+	// TODO: insecure, set to true when adding ssl
+	return false
 }
 
 // NewMasterNode creates a new master node
@@ -53,6 +71,11 @@ func NewMasterNode(nodeInfo map[string]NodeInfo, token string) *MasterNode {
 		ctx:      ctx,
 		cancel:   cancel,
 		token:    token,
+		dialOpts: []grpc.DialOption{
+			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+		},
 	}
 }
 
@@ -162,7 +185,7 @@ func (m *MasterNode) Start() {
 			m.resetNode()
 
 			// Send load command to target node
-			conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), grpc.WithInsecure(), grpc.WithBlock())
+			conn, err := grpc.Dial(fmt.Sprintf("%s:8000", targetURI), m.dialOpts...)
 			if err != nil {
 				log.Fatalf("did not connect: %v", err)
 			}
@@ -214,18 +237,6 @@ func (m *MasterNode) Start() {
 	if err := http.ListenAndServe(clientPort, nil); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// GetRequestMetadata gets metadata with token set for request
-func (m *MasterNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": fmt.Sprintf("Bearer %s", m.token),
-	}, nil
-}
-
-// RequireTransportSecurity indicates credentials are required
-func (m *MasterNode) RequireTransportSecurity() bool {
-	return true
 }
 
 // GetInput gets input from master node
@@ -295,7 +306,7 @@ func (m *MasterNode) broadcastCommand(cmd string) error {
 
 // broadcastCommandProgram broadcasts command to program nodes
 func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), m.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -323,7 +334,7 @@ func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error
 
 // broadcastCommandStack broadcasts command to stack nodes
 func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), m.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

@@ -50,18 +50,6 @@ func (s *StackNode) Start() {
 	}
 }
 
-// GetRequestMetadata gets metadata with token set for request
-func (s *StackNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": fmt.Sprintf("Bearer %s", s.token),
-	}, nil
-}
-
-// RequireTransportSecurity indicates credentials are required
-func (s *StackNode) RequireTransportSecurity() bool {
-	return true
-}
-
 // Run runs stack node
 func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	if !s.isRunning {

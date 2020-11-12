@@ -38,7 +38,8 @@ type ProgramNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
-	token string
+	token    string
+	dialOpts []grpc.DialOption
 
 	pb.UnimplementedProgramServer
 }
@@ -58,6 +59,11 @@ func NewProgramNode(masterURI string, token string) *ProgramNode {
 		ctx:       ctx,
 		cancel:    cancel,
 		token:     token,
+		dialOpts: []grpc.DialOption{
+			grpc.WithPerRPCCredentials(tokenAuth{token: token}),
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+		},
 	}
 }
 
@@ -89,18 +95,6 @@ func (p *ProgramNode) Start() {
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-}
-
-// GetRequestMetadata gets metadata with token set for request
-func (p *ProgramNode) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": fmt.Sprintf("Bearer %s", p.token),
-	}, nil
-}
-
-// RequireTransportSecurity indicates credentials are required
-func (p *ProgramNode) RequireTransportSecurity() bool {
-	return true
 }
 
 // Run starts asm execution
@@ -478,7 +472,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 			register = 3
 		}
 
-		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), p.dialOpts...)
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
@@ -496,7 +490,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 
 // pushValue pushes value to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -511,7 +505,7 @@ func (p *ProgramNode) pushValue(v int, targetURI string) error {
 
 // popValue pops value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -526,7 +520,7 @@ func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 
 // inputValue gets an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -541,7 +535,7 @@ func (p *ProgramNode) inputValue() (int, error) {
 
 // outputValue outputs value to master node
 func (p *ProgramNode) outputValue(v int) error {
-	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
