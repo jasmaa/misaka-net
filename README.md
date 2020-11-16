@@ -1,4 +1,6 @@
-# Misaka Net
+<h1 style="display: flex; align-items: center;">
+    <img src="docs/last_order.png" width="40rem" height="40rem" /> Misaka Net
+</h1>
 
 TIS-100-like distributed computing
 
