@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/utils"
@@ -21,6 +20,8 @@ type StackNode struct {
 	cancel    context.CancelFunc
 	isRunning bool
 
+	pushSignal chan interface{}
+
 	certFile, keyFile string
 
 	pb.UnimplementedStackServer
@@ -30,11 +31,12 @@ type StackNode struct {
 func NewStackNode(certFile, keyFile string) *StackNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &StackNode{
-		stack:    utils.NewIntStack(),
-		ctx:      ctx,
-		cancel:   cancel,
-		certFile: certFile,
-		keyFile:  keyFile,
+		stack:      utils.NewIntStack(),
+		ctx:        ctx,
+		cancel:     cancel,
+		pushSignal: make(chan interface{}),
+		certFile:   certFile,
+		keyFile:    keyFile,
 	}
 }
 
@@ -91,6 +93,13 @@ func (s *StackNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.Command
 // Push pushes value onto stack node
 func (s *StackNode) Push(ctx context.Context, in *pb.PushValueRequest) (*pb.CommandReply, error) {
 	s.stack.Push(int(in.Value))
+
+	// Signal push with non-blocking send
+	select {
+	case s.pushSignal <- nil:
+	default:
+	}
+
 	return &pb.CommandReply{}, nil
 }
 
@@ -121,6 +130,7 @@ func (s *StackNode) resetNode() {
 
 // waitPop waits until value can be popped from stack and returns value
 func (s *StackNode) waitPop() (int, error) {
+
 	c := make(chan int, 1)
 	go func() {
 		for {
@@ -129,7 +139,9 @@ func (s *StackNode) waitPop() (int, error) {
 				c <- v
 				return
 			}
-			time.Sleep(1 * time.Second)
+
+			// Sleep until push occurs
+			<-s.pushSignal
 		}
 	}()
 

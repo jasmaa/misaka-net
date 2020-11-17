@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/tis"
@@ -38,6 +37,7 @@ type ProgramNode struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	isRunning bool
+	runSignal chan interface{}
 
 	certFile, keyFile string
 	dialOpts          []grpc.DialOption
@@ -63,6 +63,7 @@ func NewProgramNode(masterURI string, certFile, keyFile string) *ProgramNode {
 		asm:       [][]string{[]string{"NOP"}},
 		ctx:       ctx,
 		cancel:    cancel,
+		runSignal: make(chan interface{}),
 		certFile:  certFile,
 		keyFile:   keyFile,
 		dialOpts: []grpc.DialOption{
@@ -83,7 +84,8 @@ func (p *ProgramNode) Start() {
 					log.Print(err)
 				}
 			} else {
-				time.Sleep(1 * time.Second)
+				// Sleep until run occurs
+				<-p.runSignal
 			}
 		}
 	}()
@@ -108,6 +110,13 @@ func (p *ProgramNode) Start() {
 func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
 	if !p.isRunning {
 		p.isRunning = true
+
+		// Signal run with non-blocking send
+		select {
+		case p.runSignal <- nil:
+		default:
+		}
+
 		log.Printf("node was run")
 	} else {
 		log.Printf("node is already running")
