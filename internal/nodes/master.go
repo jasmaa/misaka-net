@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	empty "github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -180,7 +181,7 @@ func (m *MasterNode) Start() {
 			}
 			defer conn.Close()
 			c := pb.NewProgramClient(conn)
-			_, err = c.Load(m.ctx, &pb.LoadRequest{Program: program})
+			_, err = c.Load(m.ctx, &pb.LoadMessage{Program: program})
 			if err != nil {
 				log.Print(err)
 				http.Error(w, fmt.Sprintf("error loading program on node %s: %s", targetURI, err.Error()), http.StatusBadRequest)
@@ -228,23 +229,23 @@ func (m *MasterNode) Start() {
 	}
 }
 
-// GetInput gets input from master node
-func (m *MasterNode) GetInput(ctx context.Context, in *pb.InputValueRequest) (*pb.ValueReply, error) {
+// GetInput handles request to get input from master node
+func (m *MasterNode) GetInput(ctx context.Context, in *empty.Empty) (*pb.ValueMessage, error) {
 	select {
 	case v := <-m.inChan:
 		log.Printf("sent input value")
-		return &pb.ValueReply{Value: int32(v)}, nil
+		return &pb.ValueMessage{Value: int32(v)}, nil
 	case <-m.ctx.Done():
 		log.Printf("input retrieval cancelled")
 		return nil, fmt.Errorf("input retrieval cancelled")
 	}
 }
 
-// SendOutput sends output to master node
-func (m *MasterNode) SendOutput(ctx context.Context, in *pb.OutputValueRequest) (*pb.CommandReply, error) {
+// SendOutput handles request to send output to master node
+func (m *MasterNode) SendOutput(ctx context.Context, in *pb.ValueMessage) (*empty.Empty, error) {
 	m.outChan <- int(in.Value)
 	log.Printf("received output value")
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
 // stopNode stops master node
@@ -303,17 +304,17 @@ func (m *MasterNode) broadcastCommandProgram(cmd string, targetURI string) error
 	c := pb.NewProgramClient(conn)
 	switch cmd {
 	case "run":
-		_, err = c.Run(m.ctx, &pb.RunRequest{})
+		_, err = c.Run(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}
 	case "pause":
-		_, err = c.Pause(m.ctx, &pb.PauseRequest{})
+		_, err = c.Pause(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}
 	case "reset":
-		_, err = c.Reset(m.ctx, &pb.ResetRequest{})
+		_, err = c.Reset(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}
@@ -331,17 +332,17 @@ func (m *MasterNode) broadcastCommandStack(cmd string, targetURI string) error {
 	c := pb.NewStackClient(conn)
 	switch cmd {
 	case "run":
-		_, err = c.Run(m.ctx, &pb.RunRequest{})
+		_, err = c.Run(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}
 	case "pause":
-		_, err = c.Pause(m.ctx, &pb.PauseRequest{})
+		_, err = c.Pause(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}
 	case "reset":
-		_, err = c.Reset(m.ctx, &pb.ResetRequest{})
+		_, err = c.Reset(m.ctx, &empty.Empty{})
 		if err != nil {
 			return err
 		}

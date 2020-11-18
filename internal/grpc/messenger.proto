@@ -4,58 +4,38 @@ package grpc;
 
 option go_package = "github.com/jasmaa/misaka-net/internal/grpc";
 
+import "google/protobuf/Empty.proto";
+
 service Master {
-  rpc GetInput(InputValueRequest) returns (ValueReply) {}
-  rpc SendOutput(OutputValueRequest) returns (CommandReply) {}
+  rpc GetInput(google.protobuf.Empty) returns (ValueMessage) {}
+  rpc SendOutput(ValueMessage) returns (google.protobuf.Empty) {}
 }
 
 service Program {
-  rpc Run(RunRequest) returns (CommandReply) {}
-  rpc Pause(PauseRequest) returns (CommandReply) {}
-  rpc Reset(ResetRequest) returns (CommandReply) {}
-  rpc Load(LoadRequest) returns (CommandReply) {}
-  rpc SendValue(SendValueRequest) returns (CommandReply) {}
+  rpc Run(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Pause(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Reset(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Load(LoadMessage) returns (google.protobuf.Empty) {}
+  rpc Send(SendMessage) returns (google.protobuf.Empty) {}
 }
 
 service Stack {
-  rpc Run(RunRequest) returns (CommandReply) {}
-  rpc Pause(PauseRequest) returns (CommandReply) {}
-  rpc Reset(ResetRequest) returns (CommandReply) {}
-  rpc Push(PushValueRequest) returns (CommandReply) {}
-  rpc Pop(PopValueRequest) returns (ValueReply) {}
+  rpc Run(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Pause(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Reset(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Push(ValueMessage) returns (google.protobuf.Empty) {}
+  rpc Pop(google.protobuf.Empty) returns (ValueMessage) {}
 }
 
-message RunRequest {}
-
-message PauseRequest {}
-
-message ResetRequest {}
-
-message LoadRequest {
+message LoadMessage {
   string program = 1;
 }
 
-message SendValueRequest {
+message SendMessage {
   sint32 value = 1;
   int32 register = 2;
 }
 
-message GetValueRequest {}
-
-message PushValueRequest {
-  sint32 value = 1;
-}
-
-message PopValueRequest {}
-
-message OutputValueRequest {
-  sint32 value = 1;
-}
-
-message InputValueRequest {}
-
-message CommandReply {}
-
-message ValueReply {
+message ValueMessage {
   sint32 value = 1;
 }

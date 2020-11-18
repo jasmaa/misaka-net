@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	empty "github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/tis"
 	"github.com/jasmaa/misaka-net/internal/utils"
@@ -106,8 +107,8 @@ func (p *ProgramNode) Start() {
 	}
 }
 
-// Run starts asm execution
-func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
+// Run handles request to start asm execution
+func (p *ProgramNode) Run(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if !p.isRunning {
 		p.isRunning = true
 
@@ -121,28 +122,56 @@ func (p *ProgramNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandRe
 	} else {
 		log.Printf("node is already running")
 	}
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Pause pauses asm execution
-func (p *ProgramNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
+// Pause handles request to pause asm execution
+func (p *ProgramNode) Pause(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if p.isRunning {
 		p.stopNode()
 		log.Printf("node was paused")
 	} else {
 		log.Printf("node is already paused")
 	}
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Reset resets asm execution and registers
-func (p *ProgramNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
+// Reset handles request to reset asm execution and registers
+func (p *ProgramNode) Reset(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if p.isRunning {
 		p.stopNode()
 	}
 	p.resetNode()
 	log.Printf("node was reset")
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
+}
+
+// Load handles request to reset node and load asm program
+func (p *ProgramNode) Load(ctx context.Context, in *pb.LoadMessage) (*empty.Empty, error) {
+	p.resetNode()
+	err := p.LoadProgram(in.Program)
+	if err != nil {
+		return nil, err
+	}
+	return &empty.Empty{}, nil
+}
+
+// Send handles request for sending value to node
+func (p *ProgramNode) Send(ctx context.Context, in *pb.SendMessage) (*empty.Empty, error) {
+	switch in.Register {
+	case 0:
+		p.r0 <- int(in.Value)
+	case 1:
+		p.r1 <- int(in.Value)
+	case 2:
+		p.r2 <- int(in.Value)
+	case 3:
+		p.r3 <- int(in.Value)
+	default:
+		return nil, fmt.Errorf("not a valid register")
+	}
+	log.Printf("received value")
+	return &empty.Empty{}, nil
 }
 
 // LoadProgram loads program onto node
@@ -161,34 +190,6 @@ func (p *ProgramNode) LoadProgram(s string) error {
 	p.asm = asm
 	p.labelMap = labelMap
 	return nil
-}
-
-// Load resets node and loads asm program
-func (p *ProgramNode) Load(ctx context.Context, in *pb.LoadRequest) (*pb.CommandReply, error) {
-	p.resetNode()
-	err := p.LoadProgram(in.Program)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.CommandReply{}, nil
-}
-
-// SendValue sends value to
-func (p *ProgramNode) SendValue(ctx context.Context, in *pb.SendValueRequest) (*pb.CommandReply, error) {
-	switch in.Register {
-	case 0:
-		p.r0 <- int(in.Value)
-	case 1:
-		p.r1 <- int(in.Value)
-	case 2:
-		p.r2 <- int(in.Value)
-	case 3:
-		p.r3 <- int(in.Value)
-	default:
-		return nil, fmt.Errorf("not a valid register")
-	}
-	log.Printf("received value")
-	return &pb.CommandReply{}, nil
 }
 
 // stopNode stops program execution
@@ -430,7 +431,7 @@ func (p *ProgramNode) update() error {
 	return nil
 }
 
-// Gets value from src
+// Gets value from src register
 func (p *ProgramNode) getFromSrc(src string) (int, error) {
 	switch src {
 	case "ACC":
@@ -470,7 +471,7 @@ func (p *ProgramNode) getFromSrc(src string) (int, error) {
 	}
 }
 
-// sendValue sends value to target in network
+// sendValue sends value from this node to target in network
 func (p *ProgramNode) sendValue(v int, target string) error {
 	if m := regexp.MustCompile(`^(\w+):(R[0123])$`).FindStringSubmatch(target); len(m) > 0 {
 		targetURI := m[1]
@@ -494,7 +495,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 		}
 		defer conn.Close()
 		c := pb.NewProgramClient(conn)
-		_, err = c.SendValue(p.ctx, &pb.SendValueRequest{Register: register, Value: int32(v)})
+		_, err = c.Send(p.ctx, &pb.SendMessage{Register: register, Value: int32(v)})
 		if err != nil {
 			return err
 		}
@@ -504,7 +505,7 @@ func (p *ProgramNode) sendValue(v int, target string) error {
 	return fmt.Errorf("'%s' not a valid network register", target)
 }
 
-// pushValue pushes value to target in network
+// pushValue pushes value from this node to target in network
 func (p *ProgramNode) pushValue(v int, targetURI string) error {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", targetURI, grpcPort), p.dialOpts...)
 	if err != nil {
@@ -512,14 +513,14 @@ func (p *ProgramNode) pushValue(v int, targetURI string) error {
 	}
 	defer conn.Close()
 	c := pb.NewStackClient(conn)
-	_, err = c.Push(p.ctx, &pb.PushValueRequest{Value: int32(v)})
+	_, err = c.Push(p.ctx, &pb.ValueMessage{Value: int32(v)})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// popValue pops value from source in network
+// popValue pops and retrieves value from source in network
 func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", sourceURI, grpcPort), p.dialOpts...)
 	if err != nil {
@@ -527,14 +528,14 @@ func (p *ProgramNode) popValue(sourceURI string) (int, error) {
 	}
 	defer conn.Close()
 	c := pb.NewStackClient(conn)
-	r, err := c.Pop(p.ctx, &pb.PopValueRequest{})
+	r, err := c.Pop(p.ctx, &empty.Empty{})
 	if err != nil {
 		return -1, err
 	}
 	return int(r.GetValue()), nil
 }
 
-// inputValue gets an input value from master node
+// inputValue retrieves an input value from master node
 func (p *ProgramNode) inputValue() (int, error) {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
@@ -542,14 +543,14 @@ func (p *ProgramNode) inputValue() (int, error) {
 	}
 	defer conn.Close()
 	c := pb.NewMasterClient(conn)
-	r, err := c.GetInput(p.ctx, &pb.InputValueRequest{})
+	r, err := c.GetInput(p.ctx, &empty.Empty{})
 	if err != nil {
 		return -1, err
 	}
 	return int(r.GetValue()), nil
 }
 
-// outputValue outputs value to master node
+// outputValue outputs value from this node to master node
 func (p *ProgramNode) outputValue(v int) error {
 	conn, err := grpc.Dial(fmt.Sprintf("%s%s", p.masterURI, grpcPort), p.dialOpts...)
 	if err != nil {
@@ -557,7 +558,7 @@ func (p *ProgramNode) outputValue(v int) error {
 	}
 	defer conn.Close()
 	c := pb.NewMasterClient(conn)
-	_, err = c.SendOutput(p.ctx, &pb.OutputValueRequest{Value: int32(v)})
+	_, err = c.SendOutput(p.ctx, &pb.ValueMessage{Value: int32(v)})
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	empty "github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/jasmaa/misaka-net/internal/grpc"
 	"github.com/jasmaa/misaka-net/internal/utils"
 	"google.golang.org/grpc"
@@ -58,40 +59,40 @@ func (s *StackNode) Start() {
 	}
 }
 
-// Run runs stack node
-func (s *StackNode) Run(ctx context.Context, in *pb.RunRequest) (*pb.CommandReply, error) {
+// Run handles request to run stack node
+func (s *StackNode) Run(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if !s.isRunning {
 		s.isRunning = true
 		log.Printf("node was run")
 	} else {
 		log.Printf("node is already running")
 	}
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Pause pauses stack node
-func (s *StackNode) Pause(ctx context.Context, in *pb.PauseRequest) (*pb.CommandReply, error) {
+// Pause handles request to pause stack node
+func (s *StackNode) Pause(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if s.isRunning {
 		s.stopNode()
 		log.Printf("node was paused")
 	} else {
 		log.Printf("node is already paused")
 	}
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Reset resets stack node
-func (s *StackNode) Reset(ctx context.Context, in *pb.ResetRequest) (*pb.CommandReply, error) {
+// Reset handles request to reset stack node
+func (s *StackNode) Reset(ctx context.Context, in *empty.Empty) (*empty.Empty, error) {
 	if s.isRunning {
 		s.stopNode()
 	}
 	s.resetNode()
 	log.Printf("node was reset")
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Push pushes value onto stack node
-func (s *StackNode) Push(ctx context.Context, in *pb.PushValueRequest) (*pb.CommandReply, error) {
+// Push handles request to push incoming value onto stack node
+func (s *StackNode) Push(ctx context.Context, in *pb.ValueMessage) (*empty.Empty, error) {
 	s.stack.Push(int(in.Value))
 
 	// Signal push with non-blocking send
@@ -100,16 +101,16 @@ func (s *StackNode) Push(ctx context.Context, in *pb.PushValueRequest) (*pb.Comm
 	default:
 	}
 
-	return &pb.CommandReply{}, nil
+	return &empty.Empty{}, nil
 }
 
-// Pop pops value from stack node
-func (s *StackNode) Pop(ctx context.Context, in *pb.PopValueRequest) (*pb.ValueReply, error) {
+// Pop handles request to pop and output value from stack node
+func (s *StackNode) Pop(ctx context.Context, in *empty.Empty) (*pb.ValueMessage, error) {
 	v, err := s.waitPop()
 	if err != nil {
 		return nil, err
 	}
-	return &pb.ValueReply{Value: int32(v)}, nil
+	return &pb.ValueMessage{Value: int32(v)}, nil
 }
 
 // stopNode stops stack node

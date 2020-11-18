@@ -4,6 +4,7 @@ package grpc
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -17,8 +18,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterClient interface {
-	GetInput(ctx context.Context, in *InputValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
-	SendOutput(ctx context.Context, in *OutputValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	GetInput(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ValueMessage, error)
+	SendOutput(ctx context.Context, in *ValueMessage, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type masterClient struct {
@@ -29,8 +30,8 @@ func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
 	return &masterClient{cc}
 }
 
-func (c *masterClient) GetInput(ctx context.Context, in *InputValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
-	out := new(ValueReply)
+func (c *masterClient) GetInput(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ValueMessage, error) {
+	out := new(ValueMessage)
 	err := c.cc.Invoke(ctx, "/grpc.Master/GetInput", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -38,8 +39,8 @@ func (c *masterClient) GetInput(ctx context.Context, in *InputValueRequest, opts
 	return out, nil
 }
 
-func (c *masterClient) SendOutput(ctx context.Context, in *OutputValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *masterClient) SendOutput(ctx context.Context, in *ValueMessage, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Master/SendOutput", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -51,8 +52,8 @@ func (c *masterClient) SendOutput(ctx context.Context, in *OutputValueRequest, o
 // All implementations must embed UnimplementedMasterServer
 // for forward compatibility
 type MasterServer interface {
-	GetInput(context.Context, *InputValueRequest) (*ValueReply, error)
-	SendOutput(context.Context, *OutputValueRequest) (*CommandReply, error)
+	GetInput(context.Context, *empty.Empty) (*ValueMessage, error)
+	SendOutput(context.Context, *ValueMessage) (*empty.Empty, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -60,10 +61,10 @@ type MasterServer interface {
 type UnimplementedMasterServer struct {
 }
 
-func (UnimplementedMasterServer) GetInput(context.Context, *InputValueRequest) (*ValueReply, error) {
+func (UnimplementedMasterServer) GetInput(context.Context, *empty.Empty) (*ValueMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInput not implemented")
 }
-func (UnimplementedMasterServer) SendOutput(context.Context, *OutputValueRequest) (*CommandReply, error) {
+func (UnimplementedMasterServer) SendOutput(context.Context, *ValueMessage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendOutput not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
@@ -80,7 +81,7 @@ func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
 }
 
 func _Master_GetInput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InputValueRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -92,13 +93,13 @@ func _Master_GetInput_Handler(srv interface{}, ctx context.Context, dec func(int
 		FullMethod: "/grpc.Master/GetInput",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetInput(ctx, req.(*InputValueRequest))
+		return srv.(MasterServer).GetInput(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Master_SendOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OutputValueRequest)
+	in := new(ValueMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func _Master_SendOutput_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/grpc.Master/SendOutput",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).SendOutput(ctx, req.(*OutputValueRequest))
+		return srv.(MasterServer).SendOutput(ctx, req.(*ValueMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -136,11 +137,11 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProgramClient interface {
-	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Load(ctx context.Context, in *LoadRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Run(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Pause(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Reset(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Load(ctx context.Context, in *LoadMessage, opts ...grpc.CallOption) (*empty.Empty, error)
+	Send(ctx context.Context, in *SendMessage, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type programClient struct {
@@ -151,8 +152,8 @@ func NewProgramClient(cc grpc.ClientConnInterface) ProgramClient {
 	return &programClient{cc}
 }
 
-func (c *programClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *programClient) Run(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Program/Run", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -160,8 +161,8 @@ func (c *programClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.Ca
 	return out, nil
 }
 
-func (c *programClient) Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *programClient) Pause(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Program/Pause", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -169,8 +170,8 @@ func (c *programClient) Pause(ctx context.Context, in *PauseRequest, opts ...grp
 	return out, nil
 }
 
-func (c *programClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *programClient) Reset(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Program/Reset", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -178,8 +179,8 @@ func (c *programClient) Reset(ctx context.Context, in *ResetRequest, opts ...grp
 	return out, nil
 }
 
-func (c *programClient) Load(ctx context.Context, in *LoadRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *programClient) Load(ctx context.Context, in *LoadMessage, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Program/Load", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -187,9 +188,9 @@ func (c *programClient) Load(ctx context.Context, in *LoadRequest, opts ...grpc.
 	return out, nil
 }
 
-func (c *programClient) SendValue(ctx context.Context, in *SendValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
-	err := c.cc.Invoke(ctx, "/grpc.Program/SendValue", in, out, opts...)
+func (c *programClient) Send(ctx context.Context, in *SendMessage, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/grpc.Program/Send", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,11 +201,11 @@ func (c *programClient) SendValue(ctx context.Context, in *SendValueRequest, opt
 // All implementations must embed UnimplementedProgramServer
 // for forward compatibility
 type ProgramServer interface {
-	Run(context.Context, *RunRequest) (*CommandReply, error)
-	Pause(context.Context, *PauseRequest) (*CommandReply, error)
-	Reset(context.Context, *ResetRequest) (*CommandReply, error)
-	Load(context.Context, *LoadRequest) (*CommandReply, error)
-	SendValue(context.Context, *SendValueRequest) (*CommandReply, error)
+	Run(context.Context, *empty.Empty) (*empty.Empty, error)
+	Pause(context.Context, *empty.Empty) (*empty.Empty, error)
+	Reset(context.Context, *empty.Empty) (*empty.Empty, error)
+	Load(context.Context, *LoadMessage) (*empty.Empty, error)
+	Send(context.Context, *SendMessage) (*empty.Empty, error)
 	mustEmbedUnimplementedProgramServer()
 }
 
@@ -212,20 +213,20 @@ type ProgramServer interface {
 type UnimplementedProgramServer struct {
 }
 
-func (UnimplementedProgramServer) Run(context.Context, *RunRequest) (*CommandReply, error) {
+func (UnimplementedProgramServer) Run(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
 }
-func (UnimplementedProgramServer) Pause(context.Context, *PauseRequest) (*CommandReply, error) {
+func (UnimplementedProgramServer) Pause(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Pause not implemented")
 }
-func (UnimplementedProgramServer) Reset(context.Context, *ResetRequest) (*CommandReply, error) {
+func (UnimplementedProgramServer) Reset(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
 }
-func (UnimplementedProgramServer) Load(context.Context, *LoadRequest) (*CommandReply, error) {
+func (UnimplementedProgramServer) Load(context.Context, *LoadMessage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Load not implemented")
 }
-func (UnimplementedProgramServer) SendValue(context.Context, *SendValueRequest) (*CommandReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendValue not implemented")
+func (UnimplementedProgramServer) Send(context.Context, *SendMessage) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
 }
 func (UnimplementedProgramServer) mustEmbedUnimplementedProgramServer() {}
 
@@ -241,7 +242,7 @@ func RegisterProgramServer(s grpc.ServiceRegistrar, srv ProgramServer) {
 }
 
 func _Program_Run_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RunRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -253,13 +254,13 @@ func _Program_Run_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/grpc.Program/Run",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProgramServer).Run(ctx, req.(*RunRequest))
+		return srv.(ProgramServer).Run(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Program_Pause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PauseRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -271,13 +272,13 @@ func _Program_Pause_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/grpc.Program/Pause",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProgramServer).Pause(ctx, req.(*PauseRequest))
+		return srv.(ProgramServer).Pause(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Program_Reset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResetRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -289,13 +290,13 @@ func _Program_Reset_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/grpc.Program/Reset",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProgramServer).Reset(ctx, req.(*ResetRequest))
+		return srv.(ProgramServer).Reset(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Program_Load_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LoadRequest)
+	in := new(LoadMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -307,25 +308,25 @@ func _Program_Load_Handler(srv interface{}, ctx context.Context, dec func(interf
 		FullMethod: "/grpc.Program/Load",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProgramServer).Load(ctx, req.(*LoadRequest))
+		return srv.(ProgramServer).Load(ctx, req.(*LoadMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Program_SendValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendValueRequest)
+func _Program_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProgramServer).SendValue(ctx, in)
+		return srv.(ProgramServer).Send(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.Program/SendValue",
+		FullMethod: "/grpc.Program/Send",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProgramServer).SendValue(ctx, req.(*SendValueRequest))
+		return srv.(ProgramServer).Send(ctx, req.(*SendMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -351,8 +352,8 @@ var _Program_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Program_Load_Handler,
 		},
 		{
-			MethodName: "SendValue",
-			Handler:    _Program_SendValue_Handler,
+			MethodName: "Send",
+			Handler:    _Program_Send_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -363,11 +364,11 @@ var _Program_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StackClient interface {
-	Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error)
-	Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error)
+	Run(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Pause(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Reset(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	Push(ctx context.Context, in *ValueMessage, opts ...grpc.CallOption) (*empty.Empty, error)
+	Pop(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ValueMessage, error)
 }
 
 type stackClient struct {
@@ -378,8 +379,8 @@ func NewStackClient(cc grpc.ClientConnInterface) StackClient {
 	return &stackClient{cc}
 }
 
-func (c *stackClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *stackClient) Run(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Run", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -387,8 +388,8 @@ func (c *stackClient) Run(ctx context.Context, in *RunRequest, opts ...grpc.Call
 	return out, nil
 }
 
-func (c *stackClient) Pause(ctx context.Context, in *PauseRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *stackClient) Pause(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Pause", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -396,8 +397,8 @@ func (c *stackClient) Pause(ctx context.Context, in *PauseRequest, opts ...grpc.
 	return out, nil
 }
 
-func (c *stackClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *stackClient) Reset(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Reset", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -405,8 +406,8 @@ func (c *stackClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.
 	return out, nil
 }
 
-func (c *stackClient) Push(ctx context.Context, in *PushValueRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
+func (c *stackClient) Push(ctx context.Context, in *ValueMessage, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Push", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -414,8 +415,8 @@ func (c *stackClient) Push(ctx context.Context, in *PushValueRequest, opts ...gr
 	return out, nil
 }
 
-func (c *stackClient) Pop(ctx context.Context, in *PopValueRequest, opts ...grpc.CallOption) (*ValueReply, error) {
-	out := new(ValueReply)
+func (c *stackClient) Pop(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ValueMessage, error) {
+	out := new(ValueMessage)
 	err := c.cc.Invoke(ctx, "/grpc.Stack/Pop", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -427,11 +428,11 @@ func (c *stackClient) Pop(ctx context.Context, in *PopValueRequest, opts ...grpc
 // All implementations must embed UnimplementedStackServer
 // for forward compatibility
 type StackServer interface {
-	Run(context.Context, *RunRequest) (*CommandReply, error)
-	Pause(context.Context, *PauseRequest) (*CommandReply, error)
-	Reset(context.Context, *ResetRequest) (*CommandReply, error)
-	Push(context.Context, *PushValueRequest) (*CommandReply, error)
-	Pop(context.Context, *PopValueRequest) (*ValueReply, error)
+	Run(context.Context, *empty.Empty) (*empty.Empty, error)
+	Pause(context.Context, *empty.Empty) (*empty.Empty, error)
+	Reset(context.Context, *empty.Empty) (*empty.Empty, error)
+	Push(context.Context, *ValueMessage) (*empty.Empty, error)
+	Pop(context.Context, *empty.Empty) (*ValueMessage, error)
 	mustEmbedUnimplementedStackServer()
 }
 
@@ -439,19 +440,19 @@ type StackServer interface {
 type UnimplementedStackServer struct {
 }
 
-func (UnimplementedStackServer) Run(context.Context, *RunRequest) (*CommandReply, error) {
+func (UnimplementedStackServer) Run(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Run not implemented")
 }
-func (UnimplementedStackServer) Pause(context.Context, *PauseRequest) (*CommandReply, error) {
+func (UnimplementedStackServer) Pause(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Pause not implemented")
 }
-func (UnimplementedStackServer) Reset(context.Context, *ResetRequest) (*CommandReply, error) {
+func (UnimplementedStackServer) Reset(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
 }
-func (UnimplementedStackServer) Push(context.Context, *PushValueRequest) (*CommandReply, error) {
+func (UnimplementedStackServer) Push(context.Context, *ValueMessage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Push not implemented")
 }
-func (UnimplementedStackServer) Pop(context.Context, *PopValueRequest) (*ValueReply, error) {
+func (UnimplementedStackServer) Pop(context.Context, *empty.Empty) (*ValueMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Pop not implemented")
 }
 func (UnimplementedStackServer) mustEmbedUnimplementedStackServer() {}
@@ -468,7 +469,7 @@ func RegisterStackServer(s grpc.ServiceRegistrar, srv StackServer) {
 }
 
 func _Stack_Run_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RunRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -480,13 +481,13 @@ func _Stack_Run_Handler(srv interface{}, ctx context.Context, dec func(interface
 		FullMethod: "/grpc.Stack/Run",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).Run(ctx, req.(*RunRequest))
+		return srv.(StackServer).Run(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Stack_Pause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PauseRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -498,13 +499,13 @@ func _Stack_Pause_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/grpc.Stack/Pause",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).Pause(ctx, req.(*PauseRequest))
+		return srv.(StackServer).Pause(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Stack_Reset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResetRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -516,13 +517,13 @@ func _Stack_Reset_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/grpc.Stack/Reset",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).Reset(ctx, req.(*ResetRequest))
+		return srv.(StackServer).Reset(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Stack_Push_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PushValueRequest)
+	in := new(ValueMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -534,13 +535,13 @@ func _Stack_Push_Handler(srv interface{}, ctx context.Context, dec func(interfac
 		FullMethod: "/grpc.Stack/Push",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).Push(ctx, req.(*PushValueRequest))
+		return srv.(StackServer).Push(ctx, req.(*ValueMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Stack_Pop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PopValueRequest)
+	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -552,7 +553,7 @@ func _Stack_Pop_Handler(srv interface{}, ctx context.Context, dec func(interface
 		FullMethod: "/grpc.Stack/Pop",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StackServer).Pop(ctx, req.(*PopValueRequest))
+		return srv.(StackServer).Pop(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
